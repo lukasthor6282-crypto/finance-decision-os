@@ -15,6 +15,7 @@ SYSTEM_PROMPT = """
 Voce e um agente financeiro privado. Responda em portugues, com base apenas nos dados do usuario.
 Nao invente saldo, renda, objetivo ou transacao. De raciocinio curto, numeros e proximos passos.
 Nao faca calculos financeiros por conta propria. Se a pergunta exigir valor especifico e o Python nao entregou esse valor, diga que nao ha dados suficientes.
+Use somente o resumo JSON fornecido. Nunca presuma extrato completo quando o dado nao estiver no JSON.
 Nao ofereca recomendacao financeira profissional; entregue analise educacional e operacional.
 """
 
@@ -48,6 +49,10 @@ def answer(conn: Connection, message: str) -> dict:
         return routed
 
     summary = summarize(conn)
+    guarded = guarded_unknown_question(message)
+    if guarded:
+        return guarded
+
     if os.getenv("OPENAI_API_KEY"):
         try:
             return openai_answer(summary, message)
@@ -56,6 +61,40 @@ def answer(conn: Connection, message: str) -> dict:
             local["answer"] += f"\n\nModo local ativado: provedor IA falhou ({type(exc).__name__})."
             return local
     return local_answer(conn, summary, message)
+
+
+def guarded_unknown_question(message: str) -> dict | None:
+    lower = message.lower()
+    has_question_shape = "?" in lower or any(word in lower for word in ["quanto", "qual", "quais", "onde", "quando", "listar", "mostre"])
+    finance_terms = [
+        "gastei",
+        "ganhei",
+        "recebi",
+        "saldo",
+        "despesa",
+        "receita",
+        "categoria",
+        "cartao",
+        "fatura",
+        "pix",
+        "trabalhei",
+        "horas",
+        "extrato",
+    ]
+    purchase_terms = ["comprar", "posso", "vale", "pagar", "assinar"]
+    if has_question_shape and any(term in lower for term in finance_terms) and not any(term in lower for term in purchase_terms):
+        return response(
+            intent="unsupported_financial_question",
+            answer="Nao consegui interpretar essa pergunta com seguranca. Posso responder melhor se voce citar periodo, categoria ou tipo de dado.",
+            actions=[
+                "Ex.: quanto gastei com alimentacao em julho?",
+                "Ex.: quanto ganhei esta semana?",
+                "Ex.: quanto trabalhei este mes?",
+            ],
+            confidence=0.62,
+            data={},
+        )
+    return None
 
 
 def record_transaction_from_chat(conn: Connection, tx: ParsedTransaction) -> dict:

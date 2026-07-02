@@ -181,6 +181,55 @@ def test_agent_answers_largest_expense_without_internal_payments(tmp_path, monke
     assert "mercado" in body["data"]["transaction"]["description"]
 
 
+def test_agent_answers_income_balance_and_transaction_list(tmp_path, monkeypatch):
+    client = make_empty_client(tmp_path, monkeypatch)
+    rows = [
+        {"date": "2026-07-01", "description": "salario recebido", "amount": 1200},
+        {"date": "2026-07-02", "description": "ifood jantar", "amount": -100},
+        {"date": "2026-07-03", "description": "mercado bairro", "amount": -80},
+    ]
+    for row in rows:
+        assert client.post("/api/transactions", json=row).status_code == 200
+
+    income = client.post("/api/agent/chat", json={"message": "quanto ganhei em 2026-07?"}).json()
+    balance = client.post("/api/agent/chat", json={"message": "qual meu saldo atual?"}).json()
+    listing = client.post("/api/agent/chat", json={"message": "liste meus lancamentos em 2026-07"}).json()
+
+    assert income["intent"] == "total_income"
+    assert income["data"]["income"] == 1200
+    assert balance["intent"] == "balance"
+    assert balance["data"]["kpis"]["balance"] == 1020
+    assert listing["intent"] == "transaction_list"
+    assert listing["data"]["count"] == 3
+
+
+def test_agent_answers_work_totals_and_hourly_rate(tmp_path, monkeypatch):
+    client = make_empty_client(tmp_path, monkeypatch)
+
+    client.post("/api/agent/chat", json={"message": "minha hora e 30 reais"})
+    client.post("/api/agent/chat", json={"message": "02/07/2026 trabalhei das 10:00 ate 12:00"})
+    client.post("/api/agent/chat", json={"message": "03/07/2026 trabalhei 3 horas"})
+
+    rate = client.post("/api/agent/chat", json={"message": "qual meu valor hora?"}).json()
+    work = client.post("/api/agent/chat", json={"message": "quanto trabalhei em 2026-07?"}).json()
+
+    assert rate["intent"] == "hourly_rate"
+    assert rate["data"]["hourlyRate"] == 30
+    assert work["intent"] == "work_total"
+    assert work["data"]["hours"] == 5
+    assert work["data"]["gross"] == 150
+
+
+def test_agent_blocks_ambiguous_financial_question_without_llm_guess(tmp_path, monkeypatch):
+    client = make_empty_client(tmp_path, monkeypatch)
+    client.post("/api/transactions", json={"date": "2026-07-01", "description": "salario recebido", "amount": 1200})
+
+    response = client.post("/api/agent/chat", json={"message": "qual foi aquela coisa do pix?"})
+
+    assert response.status_code == 200
+    assert response.json()["intent"] == "unsupported_financial_question"
+
+
 def test_category_rules_reprocess_and_manual_lock(tmp_path, monkeypatch):
     client = make_empty_client(tmp_path, monkeypatch)
     created_tx = client.post(
