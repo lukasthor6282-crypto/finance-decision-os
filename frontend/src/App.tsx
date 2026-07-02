@@ -1,16 +1,16 @@
+import type { FormEvent } from 'react'
+import type { FinanceSummary } from './types'
 import {
   Bell,
   Bot,
-  CalendarDays,
   CheckCircle2,
-  ChevronDown,
   CircleDollarSign,
   Clock3,
   Database,
   Home,
-  LockKeyhole,
   MessageCircle,
   PieChart,
+  RefreshCw,
   Search,
   Send,
   ShieldAlert,
@@ -18,66 +18,192 @@ import {
   Sparkles,
   TrendingDown,
   TrendingUp,
+  Upload,
   WalletCards,
 } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { askAgent, getSummary, importCsv } from './api'
 import './App.css'
 
+type ChatMessage = {
+  author: 'Finance OS' | 'Voce'
+  text: string
+}
+
 const navItems = [
-  { label: 'Hoje', icon: <Home size={19} />, active: true },
+  { label: 'Hoje', icon: <Home size={19} /> },
   { label: 'Fluxo', icon: <TrendingUp size={19} /> },
   { label: 'Categorias', icon: <PieChart size={19} /> },
   { label: 'Dados', icon: <Database size={19} /> },
 ]
 
-const messages = [
+const fallbackMessages: ChatMessage[] = [
   {
     author: 'Finance OS',
-    text: 'Atualizei seu caixa com os lançamentos locais. Julho fecha positivo se o mercado ficar abaixo de R$ 1.120.',
-  },
-  {
-    author: 'Você',
-    text: 'Qual decisão devo revisar hoje?',
-  },
-  {
-    author: 'Finance OS',
-    text: 'Assinaturas. Três cobranças subiram juntas e somam R$ 246/mês. Cortar uma mantém sua meta de reserva sem mexer em lazer.',
+    text: 'Carregando seus dados financeiros...',
   },
 ]
 
-const decisions = [
-  { title: 'Assinaturas', detail: '3 altas detectadas', state: 'revisar' },
-  { title: 'Mercado', detail: 'R$ 420 livres até dia 31', state: 'ok' },
-  { title: 'Compra grande', detail: 'adiar reduz risco semanal', state: 'avaliar' },
-]
-
-const cards = [
-  { label: 'Saldo atual', value: 'R$ 29.568,31', hint: 'após lançamentos locais', icon: <CircleDollarSign /> },
-  { label: 'Queima diária', value: 'R$ 307,72', hint: 'média dos últimos 18 dias', icon: <TrendingDown /> },
-  { label: 'Reserva', value: '37,5%', hint: 'meta em progresso', icon: <CheckCircle2 /> },
-]
-
-const riskRows = [
-  { name: 'Hoje', value: 'baixo', width: '28%' },
-  { name: '7 dias', value: 'baixo', width: '36%' },
-  { name: '30 dias', value: 'controlado', width: '52%' },
-]
+const money = (value = 0) =>
+  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
 
 function App() {
+  const [summary, setSummary] = useState<FinanceSummary | null>(null)
+  const [messages, setMessages] = useState<ChatMessage[]>(fallbackMessages)
+  const [question, setQuestion] = useState('')
+  const [activeNav, setActiveNav] = useState('Hoje')
+  const [loading, setLoading] = useState(true)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const loadDashboard = async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const nextSummary = await getSummary()
+      setSummary(nextSummary)
+      setMessages((current) => {
+        if (current !== fallbackMessages && current.length > 1) return current
+        return [
+          {
+            author: 'Finance OS',
+            text: `Dados carregados. Saldo ${money(nextSummary.kpis.balance)}. Proxima decisao: ${nextSummary.actionPlan[0]?.title ?? 'manter plano atual'}.`,
+          },
+        ]
+      })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Falha ao carregar backend')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    void loadDashboard()
+  }, [])
+
+  const decisions = useMemo(() => {
+    return (summary?.actionPlan ?? []).slice(0, 3).map((item) => ({
+      title: item.title,
+      detail: item.detail,
+      state: item.priority,
+    }))
+  }, [summary])
+
+  const cards = useMemo(
+    () => [
+      {
+        label: 'Saldo atual',
+        value: money(summary?.kpis.balance),
+        hint: loading ? 'sincronizando' : 'dados do backend',
+        icon: <CircleDollarSign />,
+      },
+      {
+        label: 'Queima diaria',
+        value: money(summary?.kpis.dailyBurn),
+        hint: 'media projetada',
+        icon: <TrendingDown />,
+      },
+      {
+        label: 'Reserva',
+        value: `${summary?.kpis.savingsRate ?? 0}%`,
+        hint: summary?.kpis.healthLabel ?? 'aguardando dados',
+        icon: <CheckCircle2 />,
+      },
+    ],
+    [loading, summary],
+  )
+
+  const riskRows = useMemo(() => {
+    const budgets = summary?.budgetStatus ?? []
+    if (!budgets.length) {
+      return [
+        { name: 'Hoje', value: summary?.kpis.cashRisk ?? 'carregando', width: '34%' },
+        { name: '30 dias', value: summary?.kpis.riskLevel ?? 'ok', width: '52%' },
+        { name: 'Score', value: `${summary?.kpis.healthScore ?? 0}/100`, width: '62%' },
+      ]
+    }
+    return budgets.slice(0, 3).map((budget) => ({
+      name: budget.category,
+      value: `${budget.projectedRatio}%`,
+      width: `${Math.min(Math.max(budget.projectedRatio, 8), 100)}%`,
+    }))
+  }, [summary])
+
+  const todayLabel = new Intl.DateTimeFormat('pt-BR', {
+    weekday: 'long',
+    day: '2-digit',
+    month: 'short',
+  }).format(new Date())
+
+  const handleAsk = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const text = question.trim()
+    if (!text || busy) return
+    setQuestion('')
+    setBusy(true)
+    setMessages((current) => [...current, { author: 'Voce', text }])
+    try {
+      const reply = await askAgent(text)
+      setMessages((current) => [...current, { author: 'Finance OS', text: reply.answer }])
+      void loadDashboard()
+    } catch (err) {
+      setMessages((current) => [
+        ...current,
+        {
+          author: 'Finance OS',
+          text: err instanceof Error ? `Falha ao falar com backend: ${err.message}` : 'Falha ao falar com backend.',
+        },
+      ])
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleImport = async (file: File | undefined) => {
+    if (!file) return
+    setBusy(true)
+    setError('')
+    try {
+      const result = await importCsv(file)
+      setMessages((current) => [
+        ...current,
+        {
+          author: 'Finance OS',
+          text: `CSV importado: ${result.imported} novos, ${result.duplicated} duplicados, ${result.skipped} ignorados.`,
+        },
+      ])
+      await loadDashboard()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Falha ao importar CSV')
+    } finally {
+      setBusy(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
   return (
     <div className="os-shell">
-      <aside className="side-rail glass-sheet" aria-label="Navegação">
+      <aside className="side-rail glass-sheet" aria-label="Navegacao">
         <a className="app-mark" href="#inicio" aria-label="Finance OS">
           <WalletCards size={20} />
         </a>
         <nav>
           {navItems.map((item) => (
-            <button className={item.active ? 'active' : ''} type="button" key={item.label} aria-label={item.label}>
+            <button
+              className={item.label === activeNav ? 'active' : ''}
+              type="button"
+              key={item.label}
+              aria-label={item.label}
+              onClick={() => setActiveNav(item.label)}
+            >
               {item.icon}
               <span>{item.label}</span>
             </button>
           ))}
         </nav>
-        <button className="rail-button" type="button" aria-label="Alertas">
+        <button className="rail-button" type="button" aria-label="Atualizar" onClick={() => void loadDashboard()}>
           <Bell size={19} />
         </button>
       </aside>
@@ -85,12 +211,24 @@ function App() {
       <section className="workspace" id="inicio">
         <header className="workspace-top glass-sheet">
           <div>
-            <span>Quinta, 02 Jul</span>
+            <span>{todayLabel}</span>
             <strong>Finance OS</strong>
           </div>
           <div className="top-tools">
-            <button type="button"><CalendarDays size={16} /> Julho <ChevronDown size={15} /></button>
-            <button type="button"><LockKeyhole size={16} /> Local</button>
+            <button type="button" onClick={() => void loadDashboard()}>
+              <RefreshCw size={16} /> Atualizar
+            </button>
+            <button type="button" onClick={() => fileInputRef.current?.click()}>
+              <Upload size={16} /> Importar CSV
+            </button>
+            <input
+              ref={fileInputRef}
+              aria-label="Importar CSV"
+              hidden
+              type="file"
+              accept=".csv,text/csv"
+              onChange={(event) => void handleImport(event.target.files?.[0])}
+            />
           </div>
         </header>
 
@@ -100,31 +238,45 @@ function App() {
               <span className="agent-avatar"><Bot size={22} /></span>
               <div>
                 <h1>Bom dia, Lukas.</h1>
-                <p>Revisei seu caixa, orçamento e riscos pendentes.</p>
+                <p>
+                  {error
+                    ? 'Backend indisponivel. Verifique Render e variaveis.'
+                    : summary
+                      ? `Revisei ${summary.recentTransactions.length} lancamentos recentes e ${summary.actionPlan.length} acoes.`
+                      : 'Conectando ao backend financeiro...'}
+                </p>
               </div>
             </div>
 
             <div className="status-row">
-              <span><Sparkles size={15} /> 4 sinais novos</span>
-              <span><ShieldAlert size={15} /> risco baixo</span>
-              <span><Clock3 size={15} /> projeção 30 dias</span>
+              <span><Sparkles size={15} /> {summary?.insights.length ?? 0} sinais</span>
+              <span><ShieldAlert size={15} /> risco {summary?.kpis.cashRisk ?? '...'}</span>
+              <span><Clock3 size={15} /> {loading || busy ? 'sincronizando' : 'online'}</span>
             </div>
 
             <div className="chat-window">
-              {messages.map((message) => (
-                <article className={message.author === 'Você' ? 'message user' : 'message agent'} key={message.text}>
+              {messages.map((message, index) => (
+                <article className={message.author === 'Voce' ? 'message user' : 'message agent'} key={`${message.text}-${index}`}>
                   <span>{message.author}</span>
                   <p>{message.text}</p>
                 </article>
               ))}
             </div>
 
-            <form className="ask-box" onSubmit={(event) => event.preventDefault()}>
+            <form className="ask-box" onSubmit={handleAsk}>
               <label htmlFor="ask-agent">Perguntar ao financeiro</label>
               <div>
                 <Search size={18} />
-                <input id="ask-agent" type="text" placeholder="Ex.: posso comprar isso hoje?" />
-                <button type="button" aria-label="Enviar pergunta"><Send size={18} /></button>
+                <input
+                  id="ask-agent"
+                  type="text"
+                  value={question}
+                  placeholder="Ex.: posso comprar isso hoje?"
+                  onChange={(event) => setQuestion(event.target.value)}
+                />
+                <button type="submit" aria-label="Enviar pergunta" disabled={busy}>
+                  <Send size={18} />
+                </button>
               </div>
             </form>
           </section>
@@ -133,24 +285,22 @@ function App() {
             <section className="balance-card glass-panel">
               <div className="panel-title">
                 <h2>Resumo</h2>
-                <button type="button"><SlidersHorizontal size={15} /> Filtro</button>
+                <button type="button" onClick={() => void loadDashboard()}><SlidersHorizontal size={15} /> Recarregar</button>
               </div>
-              <strong>R$ 29.568,31</strong>
-              <p>saldo atual depois dos dados importados</p>
+              <strong>{money(summary?.kpis.balance)}</strong>
+              <p>saldo atual depois dos dados do backend</p>
               <div className="mini-line" aria-label="Fluxo projetado">
-                <i />
-                <i />
-                <i />
-                <i />
-                <i />
-                <i />
+                {(summary?.monthlySeries.slice(-6) ?? []).map((point) => (
+                  <i key={point.month} style={{ height: `${Math.max(18, Math.min(58, Math.abs(point.net) / 180))}px` }} />
+                ))}
+                {!summary && [24, 35, 28, 44, 38, 52].map((height) => <i key={height} style={{ height }} />)}
               </div>
             </section>
 
             <section className="decision-card glass-panel">
               <div className="panel-title">
-                <h2>Decisões</h2>
-                <span>hoje</span>
+                <h2>Decisoes</h2>
+                <span>{activeNav.toLowerCase()}</span>
               </div>
               <div className="decision-list">
                 {decisions.map((item) => (
@@ -162,6 +312,15 @@ function App() {
                     <span>{item.state}</span>
                   </article>
                 ))}
+                {!decisions.length && (
+                  <article>
+                    <div>
+                      <strong>Aguardando backend</strong>
+                      <p>Sem plano de acao carregado ainda.</p>
+                    </div>
+                    <span>sync</span>
+                  </article>
+                )}
               </div>
             </section>
           </aside>
@@ -169,7 +328,7 @@ function App() {
           <section className="glass-panel risk-panel">
             <div className="panel-title">
               <h2>Risco de caixa</h2>
-              <span>controlado</span>
+              <span>{summary?.kpis.riskLevel ?? 'sync'}</span>
             </div>
             <div className="risk-list">
               {riskRows.map((row) => (
@@ -201,7 +360,7 @@ function App() {
               <MessageCircle size={17} />
             </div>
             <p>
-              Próxima revisão sugerida: assinaturas e mercado. Nenhuma ação automática foi feita.
+              {summary?.insights[0]?.message ?? (error || 'Backend conectado. Use chat, atualizar e importar CSV.')}
             </p>
           </section>
         </main>

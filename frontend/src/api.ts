@@ -1,7 +1,20 @@
 import type { AgentReply, FinanceSummary, Goal, Insight, Transaction } from './types'
 
-const API_BASE_URL = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '')
+const DEFAULT_PRODUCTION_API_URL = 'https://finance-decision-os.onrender.com'
+const API_BASE_URL = resolveApiBaseUrl()
 const AUTH_STORAGE_KEY = 'finance-os-basic-auth'
+
+function resolveApiBaseUrl() {
+  const fromEnv = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '')
+  if (fromEnv) return fromEnv
+
+  const hostname = window.location.hostname
+  if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
+    return DEFAULT_PRODUCTION_API_URL
+  }
+
+  return ''
+}
 
 function apiUrl(path: string) {
   return `${API_BASE_URL}${path}`
