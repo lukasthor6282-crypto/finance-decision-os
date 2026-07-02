@@ -271,7 +271,7 @@ function App() {
                   id="ask-agent"
                   type="text"
                   value={question}
-                  placeholder="Ex.: posso comprar isso hoje?"
+                  placeholder="Ex.: hoje ganhei R$250"
                   onChange={(event) => setQuestion(event.target.value)}
                 />
                 <button type="submit" aria-label="Enviar pergunta" disabled={busy}>
@@ -356,12 +356,23 @@ function App() {
 
           <section className="glass-panel notes-panel">
             <div className="panel-title">
-              <h2>Notas locais</h2>
+              <h2>Livro caixa</h2>
               <MessageCircle size={17} />
             </div>
             <p>
               {summary?.insights[0]?.message ?? (error || 'Backend conectado. Use chat, atualizar e importar CSV.')}
             </p>
+            <div className="ledger-list" aria-label="Lancamentos recentes">
+              {(summary?.recentTransactions.slice(0, 5) ?? []).map((transaction) => (
+                <article key={transaction.id}>
+                  <span>{transaction.date.slice(5)} · {transaction.category}</span>
+                  <strong>{transaction.description}</strong>
+                  <b className={transaction.amount >= 0 ? 'income' : 'expense'}>
+                    {money(transaction.amount)}
+                  </b>
+                </article>
+              ))}
+            </div>
           </section>
         </main>
       </section>

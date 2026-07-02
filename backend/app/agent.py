@@ -4,7 +4,9 @@ import os
 import re
 from sqlite3 import Connection
 
+from .accounting import ParsedTransaction, parse_transaction_message
 from .analytics import money, scenario, summarize
+from .repository import insert_transaction
 
 
 SYSTEM_PROMPT = """
@@ -15,6 +17,10 @@ Nao ofereca recomendacao financeira profissional; entregue analise educacional e
 
 
 def answer(conn: Connection, message: str) -> dict:
+    parsed = parse_transaction_message(message)
+    if parsed:
+        return record_transaction_from_chat(conn, parsed)
+
     summary = summarize(conn)
     if os.getenv("OPENAI_API_KEY"):
         try:
@@ -24,6 +30,52 @@ def answer(conn: Connection, message: str) -> dict:
             local["answer"] += f"\n\nModo local ativado: provedor IA falhou ({type(exc).__name__})."
             return local
     return local_answer(conn, summary, message)
+
+
+def record_transaction_from_chat(conn: Connection, tx: ParsedTransaction) -> dict:
+    result = insert_transaction(
+        conn,
+        {
+            "date": tx.date,
+            "description": tx.description,
+            "amount": tx.amount,
+            "category": tx.category,
+            "account": tx.account,
+            "notes": tx.notes,
+        },
+        source="agent",
+    )
+    summary = summarize(conn)
+    kpis = summary["kpis"]
+    direction = "receita" if tx.amount > 0 else "despesa"
+    duplicate_line = " Ja existia lancamento igual; nao dupliquei." if result.duplicated else ""
+
+    return response(
+        intent="record_transaction",
+        answer=(
+            f"Lancamento salvo: {direction} de {money(abs(tx.amount))} em {tx.category}. "
+            f"Saldo agora: {money(kpis['balance'])}. "
+            f"No mes: renda {money(kpis['income'])}, gastos {money(kpis['expenses'])}, liquido {money(kpis['net'])}."
+            f"{duplicate_line}"
+        ),
+        actions=[
+            "Revise categoria se necessario.",
+            "Continue registrando entradas e saidas pelo chat.",
+            summary["actionPlan"][0]["title"],
+        ],
+        confidence=0.9,
+        data={
+            "id": result.id,
+            "duplicated": result.duplicated,
+            "date": tx.date,
+            "description": tx.description,
+            "amount": tx.amount,
+            "category": tx.category,
+            "account": tx.account,
+            "balance": kpis["balance"],
+            "pattern": tx.pattern,
+        },
+    )
 
 
 def openai_answer(summary: dict, message: str) -> dict:

@@ -17,7 +17,7 @@ from .agent import answer
 from .analytics import get_transactions, scenario, summarize
 from .db import connect, init_db, is_postgres
 from .normalization import parse_amount, parse_date
-from .repository import insert_transaction, list_budgets, list_goals
+from .repository import insert_transaction, list_budgets, list_goals, list_learned_patterns
 from .schemas import AgentRequest, AgentResponse, BudgetIn, GoalIn, GoalPatch, ScenarioRequest, TransactionIn
 from .seed import seed_demo
 
@@ -231,6 +231,12 @@ def api_categories() -> list[dict]:
             """
         ).fetchall()
         return [dict(row) for row in rows]
+
+
+@app.get("/api/patterns")
+def api_patterns() -> list[dict]:
+    with connect() as conn:
+        return list_learned_patterns(conn)
 
 
 @app.post("/api/import")

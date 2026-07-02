@@ -8,6 +8,8 @@ from fastapi.testclient import TestClient
 def make_client(tmp_path, monkeypatch):
     db_path = tmp_path / "finance-test.db"
     monkeypatch.setenv("FINANCE_DB_PATH", str(db_path))
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.delenv("APP_PASSWORD", raising=False)
 
     import app.db as db
 
@@ -57,6 +59,41 @@ def test_agent_purchase_decision(tmp_path, monkeypatch):
     assert body["intent"] == "purchase_decision"
     assert body["actions"]
     assert body["data"]["amount"] == 900
+
+
+def test_agent_records_income_and_sums_repeated_entries(tmp_path, monkeypatch):
+    client = make_client(tmp_path, monkeypatch)
+    start_balance = client.get("/api/dashboard").json()["kpis"]["balance"]
+
+    first = client.post("/api/agent/chat", json={"message": "hoje eu ganhei 250R$"})
+    second = client.post("/api/agent/chat", json={"message": "hoje eu ganhei 250R$"})
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert first.json()["intent"] == "record_transaction"
+    assert second.json()["intent"] == "record_transaction"
+    assert second.json()["data"]["duplicated"] is False
+
+    end_balance = client.get("/api/dashboard").json()["kpis"]["balance"]
+    assert round(end_balance - start_balance, 2) == 500
+
+
+def test_agent_records_expense_and_learns_pattern(tmp_path, monkeypatch):
+    client = make_client(tmp_path, monkeypatch)
+
+    response = client.post("/api/agent/chat", json={"message": "gastei R$ 80 no mercado hoje"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["intent"] == "record_transaction"
+    assert body["data"]["amount"] == -80
+    assert body["data"]["category"] == "Mercado"
+
+    transactions = client.get("/api/transactions", params={"search": "mercado", "limit": 10}).json()
+    assert any(tx["amount"] == -80 and tx["source"] == "agent" for tx in transactions)
+
+    patterns = client.get("/api/patterns").json()
+    assert any(pattern["pattern"] == "mercado" and pattern["category"] == "Mercado" for pattern in patterns)
 
 
 def test_goals_crud(tmp_path, monkeypatch):

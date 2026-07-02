@@ -105,6 +105,16 @@ def init_db() -> None:
                 content TEXT NOT NULL,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
+
+            CREATE TABLE IF NOT EXISTS learned_patterns (
+                pattern TEXT PRIMARY KEY,
+                category TEXT NOT NULL,
+                direction TEXT NOT NULL,
+                usage_count INTEGER NOT NULL DEFAULT 1,
+                last_amount REAL,
+                last_seen TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
             """
         )
         migrate_db(conn)
@@ -160,6 +170,19 @@ def init_postgres() -> None:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS learned_patterns (
+                pattern TEXT PRIMARY KEY,
+                category TEXT NOT NULL,
+                direction TEXT NOT NULL,
+                usage_count INTEGER NOT NULL DEFAULT 1,
+                last_amount DOUBLE PRECISION,
+                last_seen TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
         migrate_db(conn)
 
 
@@ -173,6 +196,7 @@ def migrate_db(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_transactions_category ON transactions(category)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_transactions_account ON transactions(account)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_learned_patterns_category ON learned_patterns(category)")
 
 
 def ensure_column(conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:

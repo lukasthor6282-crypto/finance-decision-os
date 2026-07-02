@@ -690,6 +690,55 @@ svg {
   font: 540 14px/1.55 var(--ui);
 }
 
+.ledger-list {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.ledger-list article {
+  min-height: 56px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 5px 12px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid oklch(1 0 0 / 0.42);
+  border-radius: 14px;
+  background: oklch(1 0 0 / 0.026);
+  backdrop-filter: blur(30px) saturate(160%);
+  -webkit-backdrop-filter: blur(30px) saturate(160%);
+}
+
+.ledger-list span {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font: 700 11px/1 var(--ui);
+}
+
+.ledger-list strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--heading);
+  font: 740 13px/1.2 var(--ui);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ledger-list b {
+  font: 780 13px/1 var(--numbers);
+}
+
+.ledger-list b.income {
+  color: oklch(0.42 0.13 150);
+}
+
+.ledger-list b.expense {
+  color: var(--danger);
+}
+
 button:focus-visible,
 a:focus-visible,
 input:focus-visible {
