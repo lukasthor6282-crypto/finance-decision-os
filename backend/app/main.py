@@ -15,6 +15,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .agent import answer
 from .analytics import get_transactions, scenario, summarize
+from .categorizer import editable_rules
 from .db import connect, init_db, is_postgres
 from .normalization import parse_amount, parse_date
 from .repository import insert_transaction, list_budgets, list_facts, list_goals, list_learned_patterns, list_work_sessions
@@ -138,6 +139,8 @@ def api_create_transaction(payload: TransactionIn) -> dict:
                 "category": payload.category,
                 "account": payload.account,
                 "notes": payload.notes,
+                "transaction_type": payload.transaction_type,
+                "is_internal": payload.is_internal,
             },
             source="manual",
         )
@@ -227,11 +230,18 @@ def api_categories() -> list[dict]:
             """
             SELECT category, COUNT(*) AS transactions, SUM(CASE WHEN amount < 0 THEN ABS(amount) ELSE 0 END) AS spend
             FROM transactions
+            WHERE transaction_type NOT IN ('transfer', 'card_payment', 'investment')
+              AND amount < 0
             GROUP BY category
             ORDER BY spend DESC
             """
         ).fetchall()
         return [dict(row) for row in rows]
+
+
+@app.get("/api/category-rules")
+def api_category_rules() -> list[dict]:
+    return editable_rules()
 
 
 @app.get("/api/patterns")

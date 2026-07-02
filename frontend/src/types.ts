@@ -2,6 +2,8 @@ export type Kpis = {
   balance: number
   income: number
   expenses: number
+  grossExpenses: number
+  refunds: number
   previousExpenses: number
   net: number
   savingsRate: number
@@ -27,6 +29,9 @@ export type Transaction = {
   merchant?: string
   normalized_description?: string
   is_recurring?: number
+  transaction_type?: string
+  is_internal?: number | boolean
+  duplicate_group?: string
 }
 
 export type MonthlyPoint = {
@@ -80,6 +85,15 @@ export type Insight = {
   message: string
 }
 
+export type AlertItem = {
+  type: string
+  severity: 'low' | 'medium' | 'high'
+  title: string
+  message: string
+  action?: string
+  data?: unknown
+}
+
 export type RecurringExpense = {
   merchant: string
   category: string
@@ -102,6 +116,7 @@ export type FinanceSummary = {
   actionPlan: ActionItem[]
   goals: Goal[]
   insights: Insight[]
+  alerts: AlertItem[]
 }
 
 export type AgentReply = {

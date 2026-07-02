@@ -117,13 +117,68 @@ def test_agent_records_expense_and_learns_pattern(tmp_path, monkeypatch):
     body = response.json()
     assert body["intent"] == "record_transaction"
     assert body["data"]["amount"] == -80
-    assert body["data"]["category"] == "Mercado"
+    assert body["data"]["category"] == "Supermercado"
 
     transactions = client.get("/api/transactions", params={"search": "mercado", "limit": 10}).json()
     assert any(tx["amount"] == -80 and tx["source"] == "agent" for tx in transactions)
 
     patterns = client.get("/api/patterns").json()
-    assert any(pattern["pattern"] == "mercado" and pattern["category"] == "Mercado" for pattern in patterns)
+    assert any(pattern["pattern"] == "mercado" and pattern["category"] == "Supermercado" for pattern in patterns)
+
+
+def test_summary_excludes_transfers_card_payments_and_offsets_refunds(tmp_path, monkeypatch):
+    client = make_empty_client(tmp_path, monkeypatch)
+    rows = [
+        {"date": "2026-07-01", "description": "salario recebido", "amount": 1000},
+        {"date": "2026-07-02", "description": "ifood jantar", "amount": -100},
+        {"date": "2026-07-03", "description": "mercado bairro", "amount": -80},
+        {"date": "2026-07-04", "description": "estorno ifood", "amount": 20},
+        {"date": "2026-07-05", "description": "transferencia propria", "amount": -500},
+        {"date": "2026-07-06", "description": "pagamento fatura cartao", "amount": -300},
+    ]
+    for row in rows:
+        response = client.post("/api/transactions", json=row)
+        assert response.status_code == 200
+
+    summary = client.get("/api/dashboard", params={"month": "2026-07"}).json()
+    transactions = client.get("/api/transactions").json()
+
+    assert summary["kpis"]["income"] == 1000
+    assert summary["kpis"]["grossExpenses"] == 180
+    assert summary["kpis"]["refunds"] == 20
+    assert summary["kpis"]["expenses"] == 160
+    assert summary["kpis"]["net"] == 840
+    assert summary["kpis"]["balance"] == 840
+    assert any(tx["transaction_type"] == "card_payment" and tx["is_internal"] for tx in transactions)
+    assert any(tx["transaction_type"] == "transfer" and tx["is_internal"] for tx in transactions)
+
+
+def test_agent_answers_category_spend_with_deterministic_router(tmp_path, monkeypatch):
+    client = make_empty_client(tmp_path, monkeypatch)
+    client.post("/api/transactions", json={"date": "2026-07-01", "description": "ifood jantar", "amount": -100})
+    client.post("/api/transactions", json={"date": "2026-07-02", "description": "restaurante bairro", "amount": -50})
+
+    response = client.post("/api/agent/chat", json={"message": "quanto gastei com alimentacao em 2026-07?"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["intent"] == "category_spend"
+    assert body["mode"] == "deterministic"
+    assert body["data"]["value"] == 150
+
+
+def test_agent_answers_largest_expense_without_internal_payments(tmp_path, monkeypatch):
+    client = make_empty_client(tmp_path, monkeypatch)
+    client.post("/api/transactions", json={"date": "2026-07-01", "description": "pagamento fatura cartao", "amount": -900})
+    client.post("/api/transactions", json={"date": "2026-07-02", "description": "uber corrida", "amount": -45})
+    client.post("/api/transactions", json={"date": "2026-07-03", "description": "mercado bairro", "amount": -120})
+
+    response = client.post("/api/agent/chat", json={"message": "qual foi meu maior gasto em 2026-07?"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["intent"] == "largest_expense"
+    assert "mercado" in body["data"]["transaction"]["description"]
 
 
 def test_agent_calculates_hourly_work_session_from_message(tmp_path, monkeypatch):

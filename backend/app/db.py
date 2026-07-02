@@ -5,7 +5,9 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
-from .normalization import merchant_from_description, normalize_text, transaction_fingerprint
+from .categorizer import categorize
+from .duplicate_detector import duplicate_group_key, transaction_fingerprint
+from .normalization import merchant_from_description, normalize_text
 
 
 BASE_DIR = Path(__file__).resolve().parents[1]
@@ -245,11 +247,16 @@ def migrate_db(conn: sqlite3.Connection) -> None:
     ensure_column(conn, "transactions", "normalized_description", "TEXT")
     ensure_column(conn, "transactions", "fingerprint", "TEXT")
     ensure_column(conn, "transactions", "is_recurring", "INTEGER NOT NULL DEFAULT 0")
+    ensure_column(conn, "transactions", "transaction_type", "TEXT NOT NULL DEFAULT 'unknown'")
+    ensure_column(conn, "transactions", "is_internal", "INTEGER NOT NULL DEFAULT 0")
+    ensure_column(conn, "transactions", "duplicate_group", "TEXT")
     backfill_transactions(conn)
     conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_transactions_fingerprint ON transactions(fingerprint)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_transactions_category ON transactions(category)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_transactions_account ON transactions(account)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_transactions_type ON transactions(transaction_type)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_transactions_duplicate_group ON transactions(duplicate_group)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_learned_patterns_category ON learned_patterns(category)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_work_sessions_date ON work_sessions(date)")
     conn.execute(
@@ -281,20 +288,36 @@ def ensure_column(conn: sqlite3.Connection, table: str, column: str, definition:
 def backfill_transactions(conn: sqlite3.Connection) -> None:
     rows = conn.execute(
         """
-        SELECT id, date, description, amount, account
+        SELECT id, date, description, amount, account, transaction_type, duplicate_group
         FROM transactions
-        WHERE fingerprint IS NULL OR merchant IS NULL OR normalized_description IS NULL
+        WHERE fingerprint IS NULL
+           OR merchant IS NULL
+           OR normalized_description IS NULL
+           OR transaction_type = 'unknown'
+           OR duplicate_group IS NULL
         """
     ).fetchall()
     for row in rows:
         merchant = merchant_from_description(row["description"])
         normalized = normalize_text(row["description"])
-        fingerprint = transaction_fingerprint(row["date"], row["description"], row["amount"], row["account"])
+        category = categorize(row["description"], row["amount"])
+        transaction_type = row["transaction_type"] if row["transaction_type"] != "unknown" else category.transaction_type
+        fingerprint = transaction_fingerprint(
+            row["date"], row["description"], row["amount"], row["account"], transaction_type
+        )
+        group_key = row["duplicate_group"] or duplicate_group_key(
+            row["date"], row["description"], row["amount"], row["account"]
+        )
         conn.execute(
             """
             UPDATE transactions
-            SET merchant = ?, normalized_description = ?, fingerprint = ?
+            SET merchant = ?,
+                normalized_description = ?,
+                fingerprint = ?,
+                transaction_type = ?,
+                is_internal = ?,
+                duplicate_group = ?
             WHERE id = ?
             """,
-            (merchant, normalized, fingerprint, row["id"]),
+            (merchant, normalized, fingerprint, transaction_type, int(category.is_internal), group_key, row["id"]),
         )

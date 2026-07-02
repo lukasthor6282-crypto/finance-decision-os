@@ -4,9 +4,10 @@ import time
 from dataclasses import dataclass
 from sqlite3 import Connection, IntegrityError
 
-from .classifier import classify
+from .categorizer import INTERNAL_TYPES, categorize
 from .db import is_postgres
-from .normalization import merchant_from_description, normalize_text, transaction_fingerprint
+from .duplicate_detector import duplicate_group_key, transaction_fingerprint
+from .normalization import merchant_from_description, normalize_text
 from .worktime import ParsedWorkSession
 
 
@@ -26,13 +27,19 @@ class WorkSessionResult:
 
 def insert_transaction(conn: Connection, tx: dict, source: str = "manual") -> InsertResult:
     amount = float(tx["amount"])
-    category = tx.get("category") or learned_category(conn, tx["description"], amount) or classify(tx["description"], amount).category
+    categorized = categorize(tx["description"], amount)
+    learned = learned_category(conn, tx["description"], amount)
+    category = tx.get("category") or (categorized.category if categorized.confidence >= 0.8 else learned) or categorized.category
+    transaction_type = tx.get("transaction_type") or categorized.transaction_type
+    explicit_internal = tx.get("is_internal")
+    is_internal = int((transaction_type in INTERNAL_TYPES) if explicit_internal is None else bool(explicit_internal))
     account = tx.get("account") or "Principal"
     merchant = merchant_from_description(tx["description"])
     normalized = normalize_text(tx["description"])
-    fingerprint = transaction_fingerprint(tx["date"], tx["description"], amount, account)
+    fingerprint = transaction_fingerprint(tx["date"], tx["description"], amount, account, transaction_type)
     if source == "agent":
         fingerprint = f"{fingerprint}:agent:{time.time_ns()}"
+    group_key = duplicate_group_key(tx["date"], tx["description"], amount, account)
 
     if source != "agent":
         row = conn.execute("SELECT id, category FROM transactions WHERE fingerprint = ?", (fingerprint,)).fetchone()
@@ -45,9 +52,9 @@ def insert_transaction(conn: Connection, tx: dict, source: str = "manual") -> In
             f"""
             INSERT INTO transactions (
                 date, description, amount, category, account, source, notes,
-                merchant, normalized_description, fingerprint
+                merchant, normalized_description, fingerprint, transaction_type, is_internal, duplicate_group
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             {returning}
             """,
             (
@@ -61,6 +68,9 @@ def insert_transaction(conn: Connection, tx: dict, source: str = "manual") -> In
                 merchant,
                 normalized,
                 fingerprint,
+                transaction_type,
+                is_internal,
+                group_key,
             ),
         )
         inserted_id = cursor.fetchone()["id"] if is_postgres(conn) else cursor.lastrowid

@@ -4,6 +4,7 @@ from collections import defaultdict
 from datetime import date, datetime
 from sqlite3 import Connection
 
+from .alerts import generate_alerts
 from .classifier import classify
 from .normalization import normalize_text
 from .repository import list_budgets, list_goals
@@ -15,6 +16,23 @@ def money(value: float) -> str:
 
 def rows_to_dicts(rows) -> list[dict]:
     return [dict(row) for row in rows]
+
+
+EXCLUDED_FROM_CASHFLOW = {"transfer", "card_payment", "investment"}
+
+
+def is_real_income(tx: dict) -> bool:
+    return tx["amount"] > 0 and tx.get("transaction_type") not in EXCLUDED_FROM_CASHFLOW | {"refund"}
+
+
+def is_real_expense(tx: dict) -> bool:
+    return tx["amount"] < 0 and tx.get("transaction_type") not in EXCLUDED_FROM_CASHFLOW
+
+
+def refund_amount(tx: dict) -> float:
+    if tx.get("transaction_type") == "refund" and tx["amount"] > 0:
+        return float(tx["amount"])
+    return 0.0
 
 
 def get_transactions(
@@ -50,7 +68,7 @@ def get_transactions(
     rows = conn.execute(
         f"""
         SELECT id, date, description, amount, category, account, source, notes,
-               merchant, normalized_description, is_recurring
+               merchant, normalized_description, is_recurring, transaction_type, is_internal, duplicate_group
         FROM transactions
         {where}
         ORDER BY date DESC, id DESC
@@ -76,10 +94,14 @@ def summarize(conn: Connection, month: str | None = None) -> dict:
     previous_month = previous_month_key(month_key)
     previous_month_txs = [tx for tx in transactions if tx["date"].startswith(previous_month)]
 
-    income = sum(tx["amount"] for tx in current_month if tx["amount"] > 0)
-    expenses = abs(sum(tx["amount"] for tx in current_month if tx["amount"] < 0))
-    previous_expenses = abs(sum(tx["amount"] for tx in previous_month_txs if tx["amount"] < 0))
-    balance = sum(tx["amount"] for tx in transactions)
+    income = sum(tx["amount"] for tx in current_month if is_real_income(tx))
+    gross_expenses = abs(sum(tx["amount"] for tx in current_month if is_real_expense(tx)))
+    refunds = sum(refund_amount(tx) for tx in current_month)
+    expenses = max(gross_expenses - refunds, 0)
+    previous_gross_expenses = abs(sum(tx["amount"] for tx in previous_month_txs if is_real_expense(tx)))
+    previous_refunds = sum(refund_amount(tx) for tx in previous_month_txs)
+    previous_expenses = max(previous_gross_expenses - previous_refunds, 0)
+    balance = sum(tx["amount"] for tx in transactions if tx.get("transaction_type") not in EXCLUDED_FROM_CASHFLOW)
     net = income - expenses
     savings_rate = (net / income * 100) if income else 0
 
@@ -100,13 +122,15 @@ def summarize(conn: Connection, month: str | None = None) -> dict:
     health = financial_health_score(savings_rate, risk_score["label"], budget_status, recurring, goals)
     action_plan = build_action_plan(savings_rate, category_spend, budget_status, anomalies, recurring, goals)
 
-    return {
+    summary = {
         "asOf": today.isoformat(),
         "month": month_key,
         "kpis": {
             "balance": round(balance, 2),
             "income": round(income, 2),
             "expenses": round(expenses, 2),
+            "grossExpenses": round(gross_expenses, 2),
+            "refunds": round(refunds, 2),
             "previousExpenses": round(previous_expenses, 2),
             "net": round(net, 2),
             "savingsRate": round(savings_rate, 1),
@@ -129,6 +153,8 @@ def summarize(conn: Connection, month: str | None = None) -> dict:
         "goals": goals,
         "insights": build_insights(savings_rate, category_spend, budget_status, anomalies, recurring, goals),
     }
+    summary["alerts"] = generate_alerts(summary)
+    return summary
 
 
 def empty_summary(as_of: str, month_key: str) -> dict:
@@ -139,6 +165,8 @@ def empty_summary(as_of: str, month_key: str) -> dict:
             "balance": 0,
             "income": 0,
             "expenses": 0,
+            "grossExpenses": 0,
+            "refunds": 0,
             "previousExpenses": 0,
             "net": 0,
             "savingsRate": 0,
@@ -160,6 +188,7 @@ def empty_summary(as_of: str, month_key: str) -> dict:
         "actionPlan": [],
         "goals": [],
         "insights": [],
+        "alerts": [],
     }
 
 
@@ -180,11 +209,14 @@ def build_monthly_series(transactions: list[dict]) -> list[dict]:
     for tx in transactions:
         key = tx["date"][:7]
         monthly[key]["month"] = key
-        if tx["amount"] >= 0:
+        if is_real_income(tx):
             monthly[key]["income"] += tx["amount"]
-        else:
+        elif is_real_expense(tx):
             monthly[key]["expenses"] += abs(tx["amount"])
-        monthly[key]["net"] += tx["amount"]
+        elif refund_amount(tx):
+            monthly[key]["expenses"] = max(monthly[key]["expenses"] - refund_amount(tx), 0)
+        if tx.get("transaction_type") not in EXCLUDED_FROM_CASHFLOW:
+            monthly[key]["net"] += tx["amount"]
     return [
         {
             "month": value["month"],
@@ -204,9 +236,11 @@ def build_category_spend(transactions: list[dict], current_only: bool = False) -
     for tx in transactions:
         if current_only and not tx["date"].startswith(month_key):
             continue
-        if tx["amount"] < 0:
+        if is_real_expense(tx):
             categories[tx["category"]] += abs(tx["amount"])
             category_counts[tx["category"]] += 1
+        elif refund_amount(tx) and tx["category"] in categories:
+            categories[tx["category"]] = max(categories[tx["category"]] - refund_amount(tx), 0)
     total = sum(categories.values())
     return [
         {
@@ -229,8 +263,10 @@ def build_budget_status(
     budgets = list_budgets(conn)
     current_categories = defaultdict(float)
     for tx in current_month:
-        if tx["amount"] < 0:
+        if is_real_expense(tx):
             current_categories[tx["category"]] += abs(tx["amount"])
+        elif refund_amount(tx):
+            current_categories[tx["category"]] = max(current_categories[tx["category"]] - refund_amount(tx), 0)
 
     status = []
     for budget in budgets:
@@ -290,7 +326,7 @@ def score_cash_risk(
 def detect_anomalies(transactions: list[dict]) -> list[dict]:
     by_category = defaultdict(list)
     for tx in transactions:
-        if tx["amount"] < 0:
+        if is_real_expense(tx):
             by_category[tx["category"]].append(abs(tx["amount"]))
 
     averages = {
@@ -302,7 +338,7 @@ def detect_anomalies(transactions: list[dict]) -> list[dict]:
     for tx in transactions:
         amount = abs(tx["amount"])
         avg = averages.get(tx["category"])
-        if tx["amount"] < 0 and avg and amount > avg * 2.2 and amount > 250:
+        if is_real_expense(tx) and avg and amount > avg * 2.2 and amount > 250:
             anomalies.append(
                 {
                     "date": tx["date"],
@@ -319,7 +355,7 @@ def detect_anomalies(transactions: list[dict]) -> list[dict]:
 def detect_recurring(transactions: list[dict]) -> list[dict]:
     groups = defaultdict(list)
     for tx in transactions:
-        if tx["amount"] >= 0:
+        if not is_real_expense(tx):
             continue
         key = normalize_text(tx.get("merchant") or tx["description"])
         if not key:

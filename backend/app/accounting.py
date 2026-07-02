@@ -4,7 +4,7 @@ import re
 from dataclasses import dataclass
 from datetime import date, timedelta
 
-from .classifier import classify
+from .categorizer import categorize
 from .normalization import normalize_text, parse_amount
 
 
@@ -32,18 +32,6 @@ EXPENSE_WORDS = {
 }
 FUTURE_WORDS = {"vou", "pretendo", "quero", "posso", "devo", "vale"}
 
-CATEGORY_HINTS = [
-    ("Mercado", {"mercado", "supermercado", "atacadao", "padaria", "hortifruti"}),
-    ("Alimentacao", {"ifood", "restaurante", "almoco", "jantar", "lanche", "cafe", "delivery"}),
-    ("Transporte", {"uber", "99", "onibus", "metro", "gasolina", "posto", "combustivel"}),
-    ("Moradia", {"aluguel", "condominio", "luz", "energia", "agua", "internet", "gas"}),
-    ("Assinaturas", {"netflix", "spotify", "prime", "disney", "hbo", "assinatura"}),
-    ("Saude", {"farmacia", "medico", "consulta", "exame", "dentista"}),
-    ("Educacao", {"curso", "faculdade", "escola", "livro"}),
-    ("Investimentos", {"aporte", "tesouro", "investimento", "corretora"}),
-]
-
-
 @dataclass(frozen=True)
 class ParsedTransaction:
     date: str
@@ -59,6 +47,9 @@ def parse_transaction_message(message: str) -> ParsedTransaction | None:
     clean = " ".join(message.strip().split())
     normalized = normalize_text(clean)
     if not normalized:
+        return None
+
+    if looks_like_question(normalized, clean):
         return None
 
     amount = extract_amount(clean)
@@ -95,6 +86,16 @@ def has_bookkeeping_verb(normalized: str) -> bool:
     return any(word in normalized for word in INCOME_WORDS | EXPENSE_WORDS)
 
 
+def looks_like_question(normalized: str, original: str) -> bool:
+    question_words = {"quanto", "qual", "quais", "onde", "quando", "como"}
+    tokens = set(normalized.split())
+    if "?" in original and tokens & question_words:
+        return True
+    if tokens & question_words and any(word in normalized for word in ["gastei", "gasto", "ganhei", "recebi", "sobrou"]):
+        return True
+    return False
+
+
 def detect_direction(normalized: str) -> str | None:
     if any(word in normalized for word in INCOME_WORDS):
         return "income"
@@ -107,7 +108,7 @@ def extract_amount(message: str) -> float | None:
     patterns = [
         r"r\$\s*([+-]?\d+(?:[.,]\d{1,2})?)",
         r"([+-]?\d+(?:[.,]\d{1,2})?)\s*(?:r\$|reais|real)",
-        r"\b([+-]?\d{2,}(?:[.,]\d{1,2})?)\b",
+        r"(?<![/-])\b([+-]?\d{2,}(?:[.,]\d{1,2})?)\b(?![/-])",
     ]
     for pattern in patterns:
         match = re.search(pattern, message, re.IGNORECASE)
@@ -154,12 +155,8 @@ def infer_account(normalized: str) -> str:
 
 def infer_category(description: str, normalized: str, amount: float) -> str:
     if amount > 0:
-        return "Renda"
-    tokens = set(normalized.split())
-    for category, hints in CATEGORY_HINTS:
-        if tokens & hints:
-            return category
-    return classify(description, amount).category
+        return "Receita"
+    return categorize(description or normalized, amount).category
 
 
 def extract_description(message: str, normalized: str, direction: str) -> str:

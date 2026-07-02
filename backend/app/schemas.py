@@ -10,12 +10,17 @@ class TransactionIn(BaseModel):
     category: str | None = None
     account: str = "Principal"
     notes: str | None = None
+    transaction_type: str | None = None
+    is_internal: bool | None = None
 
 
 class TransactionOut(TransactionIn):
     id: int
     category: str
     source: str
+    transaction_type: str
+    is_internal: bool | int = False
+    duplicate_group: str | None = None
 
 
 class BudgetIn(BaseModel):

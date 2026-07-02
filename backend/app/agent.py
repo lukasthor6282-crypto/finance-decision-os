@@ -6,6 +6,7 @@ from sqlite3 import Connection
 
 from .accounting import ParsedTransaction, parse_transaction_message
 from .analytics import money, scenario, summarize
+from .question_router import answer_question
 from .repository import existing_work_session, get_float_fact, insert_transaction, insert_work_session, set_fact
 from .worktime import ParsedWorkSession, parse_hourly_rate, parse_work_session_message
 
@@ -13,6 +14,7 @@ from .worktime import ParsedWorkSession, parse_hourly_rate, parse_work_session_m
 SYSTEM_PROMPT = """
 Voce e um agente financeiro privado. Responda em portugues, com base apenas nos dados do usuario.
 Nao invente saldo, renda, objetivo ou transacao. De raciocinio curto, numeros e proximos passos.
+Nao faca calculos financeiros por conta propria. Se a pergunta exigir valor especifico e o Python nao entregou esse valor, diga que nao ha dados suficientes.
 Nao ofereca recomendacao financeira profissional; entregue analise educacional e operacional.
 """
 
@@ -40,6 +42,10 @@ def answer(conn: Connection, message: str) -> dict:
     parsed = parse_transaction_message(message)
     if parsed:
         return record_transaction_from_chat(conn, parsed)
+
+    routed = answer_question(conn, message)
+    if routed:
+        return routed
 
     summary = summarize(conn)
     if os.getenv("OPENAI_API_KEY"):
@@ -121,7 +127,8 @@ def record_work_session_from_chat(conn: Connection, session: ParsedWorkSession) 
             "date": session.date,
             "description": session.description,
             "amount": session.gross_amount,
-            "category": "Renda",
+            "category": "Receita",
+            "transaction_type": "income",
             "account": "Principal",
             "notes": session.notes,
         },
