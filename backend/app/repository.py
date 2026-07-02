@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from sqlite3 import Connection, IntegrityError
 
 from .categorizer import INTERNAL_TYPES, Categorization, categorize, editable_rules, infer_signed_type
+from .commitments import ParsedCommitment
 from .db import is_postgres
 from .duplicate_detector import duplicate_group_key, transaction_fingerprint
 from .normalization import merchant_from_description, normalize_text
@@ -22,6 +23,12 @@ class InsertResult:
 class WorkSessionResult:
     id: int | None
     transaction_id: int | None
+    duplicated: bool = False
+
+
+@dataclass(frozen=True)
+class CommitmentResult:
+    id: int | None
     duplicated: bool = False
 
 
@@ -365,6 +372,90 @@ def list_facts(conn: Connection) -> list[dict]:
         SELECT key, value, value_type, confidence, updated_at, created_at
         FROM user_facts
         ORDER BY updated_at DESC
+        """
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def insert_commitment(conn: Connection, commitment: ParsedCommitment) -> CommitmentResult:
+    normalized = normalize_text(commitment.description)
+    row = conn.execute(
+        """
+        SELECT id
+        FROM commitments
+        WHERE kind = ? AND normalized_description = ? AND active = 1
+        ORDER BY id DESC
+        LIMIT 1
+        """,
+        (commitment.kind, normalized),
+    ).fetchone()
+    if row:
+        conn.execute(
+            """
+            UPDATE commitments
+            SET description = ?,
+                amount = ?,
+                category = ?,
+                frequency = ?,
+                installments_remaining = ?,
+                installments_total = ?,
+                due_day = ?,
+                source = 'agent',
+                notes = ?,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+            """,
+            (
+                commitment.description,
+                commitment.amount,
+                commitment.category,
+                commitment.frequency,
+                commitment.installments_remaining,
+                commitment.installments_total,
+                commitment.due_day,
+                commitment.notes,
+                row["id"],
+            ),
+        )
+        return CommitmentResult(row["id"], True)
+
+    returning = " RETURNING id" if is_postgres(conn) else ""
+    cursor = conn.execute(
+        f"""
+        INSERT INTO commitments (
+            kind, description, normalized_description, amount, category, frequency,
+            installments_remaining, installments_total, due_day, active, source, notes
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 'agent', ?)
+        {returning}
+        """,
+        (
+            commitment.kind,
+            commitment.description,
+            normalized,
+            commitment.amount,
+            commitment.category,
+            commitment.frequency,
+            commitment.installments_remaining,
+            commitment.installments_total,
+            commitment.due_day,
+            commitment.notes,
+        ),
+    )
+    commitment_id = cursor.fetchone()["id"] if is_postgres(conn) else cursor.lastrowid
+    return CommitmentResult(commitment_id, False)
+
+
+def list_commitments(conn: Connection, active_only: bool = True) -> list[dict]:
+    where = "WHERE active = 1" if active_only else ""
+    rows = conn.execute(
+        f"""
+        SELECT id, kind, description, amount, category, frequency,
+               installments_remaining, installments_total, due_day, active,
+               source, notes, created_at, updated_at
+        FROM commitments
+        {where}
+        ORDER BY active DESC, kind, created_at DESC
         """
     ).fetchall()
     return [dict(row) for row in rows]

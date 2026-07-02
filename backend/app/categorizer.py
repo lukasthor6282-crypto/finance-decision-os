@@ -75,6 +75,8 @@ def infer_signed_type(transaction_type: str, amount: float) -> str:
 
 def phrase_match(text: str, phrase: str) -> bool:
     phrase = normalize_text(phrase)
+    if not phrase:
+        return False
     if " " in phrase:
         return phrase in text
     return re.search(rf"\b{re.escape(phrase)}\b", text) is not None

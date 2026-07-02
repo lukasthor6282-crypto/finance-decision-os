@@ -6,11 +6,13 @@ from sqlite3 import Connection
 
 from .accounting import ParsedTransaction, parse_transaction_message
 from .analytics import money, scenario, summarize
+from .commitments import ParsedCommitment, parse_commitment_message
 from .question_router import answer_question
 from .repository import (
     existing_work_session,
     find_work_session_for_correction,
     get_float_fact,
+    insert_commitment,
     insert_transaction,
     insert_work_session,
     set_fact,
@@ -49,6 +51,10 @@ def answer(conn: Connection, message: str) -> dict:
             confidence=0.94,
             data={"hourlyRate": hourly_rate},
         )
+
+    commitment = parse_commitment_message(message)
+    if commitment:
+        return record_commitment_from_chat(conn, commitment)
 
     parsed = parse_transaction_message(message)
     if parsed:
@@ -150,6 +156,37 @@ def record_transaction_from_chat(conn: Connection, tx: ParsedTransaction) -> dic
             "account": tx.account,
             "balance": kpis["balance"],
             "pattern": tx.pattern,
+        },
+    )
+
+
+def record_commitment_from_chat(conn: Connection, commitment: ParsedCommitment) -> dict:
+    result = insert_commitment(conn, commitment)
+    label = "receita fixa" if commitment.kind == "income" else "despesa fixa"
+    remaining = ""
+    total_future = None
+    if commitment.installments_remaining:
+        total_future = round(commitment.amount * commitment.installments_remaining, 2)
+        remaining = f" {commitment.installments_remaining} parcelas restantes, total futuro {money(total_future)}."
+    duplicate_line = " Atualizei compromisso existente." if result.duplicated else ""
+
+    return response(
+        intent="remember_commitment",
+        answer=(
+            f"{label.capitalize()} salva: {commitment.description} de {money(commitment.amount)}/mes."
+            f"{remaining}{duplicate_line} Nao alterei saldo; saldo muda quando voce registrar pagamento ou receita real."
+        ),
+        actions=[
+            "Veja em Receitas/Despesas.",
+            "Quando pagar a parcela, diga: paguei R$ 481,60 parcela celular.",
+            "Se quitar ou mudar valor, me informe pelo chat.",
+        ],
+        confidence=0.93,
+        data={
+            **commitment.__dict__,
+            "id": result.id,
+            "duplicated": result.duplicated,
+            "futureTotal": total_future,
         },
     )
 

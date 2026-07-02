@@ -50,6 +50,23 @@ export type WorkSession = {
   created_at?: string
 }
 
+export type Commitment = {
+  id: number
+  kind: 'income' | 'expense'
+  description: string
+  amount: number
+  category: string
+  frequency: string
+  installments_remaining: number | null
+  installments_total: number | null
+  due_day: number | null
+  active: number | boolean
+  source: string
+  notes?: string | null
+  created_at?: string
+  updated_at?: string
+}
+
 export type MonthlyPoint = {
   month: string
   income: number

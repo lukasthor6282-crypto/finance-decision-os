@@ -1,5 +1,5 @@
 import type { FormEvent } from 'react'
-import type { CategoryRule, FinanceSummary, Transaction, WorkSession } from './types'
+import type { CategoryRule, Commitment, FinanceSummary, Transaction, WorkSession } from './types'
 import {
   Bell,
   Bot,
@@ -31,6 +31,7 @@ import {
   createCategoryRule,
   deleteCategoryRule,
   getCategoryRules,
+  getCommitments,
   getSummary,
   getTransactions,
   getWorkSessions,
@@ -47,6 +48,7 @@ type ChatMessage = {
 
 const navItems = [
   { label: 'Hoje', icon: <Home size={19} /> },
+  { label: 'Receitas', icon: <CircleDollarSign size={19} /> },
   { label: 'Fluxo', icon: <TrendingUp size={19} /> },
   { label: 'Categorias', icon: <PieChart size={19} /> },
   { label: 'Horas', icon: <Clock3 size={19} /> },
@@ -110,9 +112,11 @@ function App() {
   const [error, setError] = useState('')
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [workSessions, setWorkSessions] = useState<WorkSession[]>([])
+  const [commitments, setCommitments] = useState<Commitment[]>([])
   const [categoryRules, setCategoryRules] = useState<CategoryRule[]>([])
   const [rulesLoading, setRulesLoading] = useState(false)
   const [workLoading, setWorkLoading] = useState(false)
+  const [moneyLoading, setMoneyLoading] = useState(false)
   const [notice, setNotice] = useState('')
   const [ruleForm, setRuleForm] = useState({
     pattern: '',
@@ -184,9 +188,27 @@ function App() {
     }
   }
 
+  const loadMoneyData = async () => {
+    setMoneyLoading(true)
+    setError('')
+    try {
+      const [nextTransactions, nextCommitments] = await Promise.all([
+        getTransactions({ limit: 120 }),
+        getCommitments(),
+      ])
+      setTransactions(nextTransactions)
+      setCommitments(nextCommitments)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Falha ao carregar receitas e despesas')
+    } finally {
+      setMoneyLoading(false)
+    }
+  }
+
   useEffect(() => {
     if (activeNav === 'Regras') void loadRulesData()
     if (activeNav === 'Horas') void loadWorkData()
+    if (activeNav === 'Receitas') void loadMoneyData()
   }, [activeNav])
 
   const decisions = useMemo(() => {
@@ -275,6 +297,27 @@ function App() {
     }
   }, [workDays.length, workSessions])
 
+  const moneyTotals = useMemo(() => {
+    const income = transactions.filter((tx) => Number(tx.amount) > 0).reduce((sum, tx) => sum + Number(tx.amount), 0)
+    const expenses = transactions.filter((tx) => Number(tx.amount) < 0).reduce((sum, tx) => sum + Math.abs(Number(tx.amount)), 0)
+    const fixedExpenses = commitments
+      .filter((item) => item.kind === 'expense' && Boolean(item.active))
+      .reduce((sum, item) => sum + Number(item.amount), 0)
+    const fixedIncome = commitments
+      .filter((item) => item.kind === 'income' && Boolean(item.active))
+      .reduce((sum, item) => sum + Number(item.amount), 0)
+    const futureDebt = commitments
+      .filter((item) => item.kind === 'expense' && item.installments_remaining)
+      .reduce((sum, item) => sum + Number(item.amount) * Number(item.installments_remaining), 0)
+    return {
+      income: Number(income.toFixed(2)),
+      expenses: Number(expenses.toFixed(2)),
+      fixedExpenses: Number(fixedExpenses.toFixed(2)),
+      fixedIncome: Number(fixedIncome.toFixed(2)),
+      futureDebt: Number(futureDebt.toFixed(2)),
+    }
+  }, [commitments, transactions])
+
   const todayLabel = new Intl.DateTimeFormat('pt-BR', {
     weekday: 'long',
     day: '2-digit',
@@ -293,6 +336,7 @@ function App() {
       setMessages((current) => [...current, { author: 'Finance OS', text: reply.answer }])
       void loadDashboard()
       if (reply.intent?.includes('work_session') || activeNav === 'Horas') void loadWorkData()
+      if (reply.intent === 'remember_commitment' || activeNav === 'Receitas') void loadMoneyData()
     } catch (err) {
       setMessages((current) => [
         ...current,
@@ -479,7 +523,111 @@ function App() {
           </div>
         </header>
 
-        {activeNav === 'Regras' ? (
+        {activeNav === 'Receitas' ? (
+          <main className="money-grid">
+            <section className="money-hero glass-panel">
+              <div>
+                <span>Livro financeiro</span>
+                <h1>Receitas e despesas</h1>
+                <p>Lancamentos reais mexem no saldo. Gastos fixos ficam como compromissos futuros ate voce registrar o pagamento.</p>
+              </div>
+              <button type="button" onClick={() => void loadMoneyData()} disabled={moneyLoading || busy}>
+                <RefreshCw size={16} /> Atualizar
+              </button>
+              {(notice || error) && <p className={error ? 'rules-feedback danger' : 'rules-feedback'}>{error || notice}</p>}
+            </section>
+
+            <section className="money-kpis">
+              <article className="metric-card glass-panel">
+                <span><TrendingUp /></span>
+                <div>
+                  <p>Receitas registradas</p>
+                  <strong>{money(summary?.kpis.income ?? moneyTotals.income)}</strong>
+                  <small>entradas que ja contam no saldo</small>
+                </div>
+              </article>
+              <article className="metric-card glass-panel">
+                <span><TrendingDown /></span>
+                <div>
+                  <p>Despesas registradas</p>
+                  <strong>{money(summary?.kpis.expenses ?? moneyTotals.expenses)}</strong>
+                  <small>saidas reais do periodo</small>
+                </div>
+              </article>
+              <article className="metric-card glass-panel">
+                <span><CircleDollarSign /></span>
+                <div>
+                  <p>Fixos mensais</p>
+                  <strong>{money(moneyTotals.fixedExpenses)}</strong>
+                  <small>{money(moneyTotals.futureDebt)} futuro parcelado</small>
+                </div>
+              </article>
+            </section>
+
+            <section className="commitment-panel glass-panel">
+              <div className="panel-title">
+                <h2>Compromissos salvos</h2>
+                <span>{commitments.length} ativos</span>
+              </div>
+              <div className="commitment-list">
+                {commitments.map((item) => (
+                  <article key={item.id}>
+                    <div>
+                      <span>{item.kind === 'income' ? 'receita fixa' : 'despesa fixa'} · {item.category}</span>
+                      <strong>{item.description}</strong>
+                      <p>
+                        {item.installments_remaining
+                          ? `${item.installments_remaining} parcelas restantes · total ${money(item.amount * item.installments_remaining)}`
+                          : item.frequency === 'monthly'
+                            ? 'mensal'
+                            : item.frequency}
+                        {item.due_day ? ` · vence dia ${item.due_day}` : ''}
+                      </p>
+                    </div>
+                    <b className={item.kind === 'income' ? 'income' : 'expense'}>{money(item.amount)}</b>
+                  </article>
+                ))}
+                {!commitments.length && (
+                  <article className="empty-money">
+                    <div>
+                      <span>Nenhum compromisso fixo</span>
+                      <strong>Ex.: gasto fixo de R$481,60 parcela celular, 11 parcelas restantes</strong>
+                    </div>
+                  </article>
+                )}
+              </div>
+            </section>
+
+            <section className="money-transactions glass-panel">
+              <div className="panel-title">
+                <h2>Lancamentos</h2>
+                <span>{transactions.length} recentes</span>
+              </div>
+              <div className="money-table">
+                <div className="money-table-head">
+                  <span>Data</span>
+                  <span>Descricao</span>
+                  <span>Categoria</span>
+                  <span>Valor</span>
+                </div>
+                {transactions.map((transaction) => (
+                  <article key={transaction.id}>
+                    <span>{formatDate(transaction.date)}</span>
+                    <strong>{transaction.description}</strong>
+                    <span>{transaction.category}</span>
+                    <b className={transaction.amount >= 0 ? 'income' : 'expense'}>{money(transaction.amount)}</b>
+                  </article>
+                ))}
+                {!transactions.length && (
+                  <article className="empty-row">
+                    <strong>Sem lancamentos ainda</strong>
+                    <small>Registre pelo chat: ganhei R$250, gastei R$80 no mercado.</small>
+                  </article>
+                )}
+              </div>
+            </section>
+          </main>
+        ) : activeNav === 'Regras' ? (
           <main className="rules-grid">
             <section className="rules-hero glass-panel">
               <div>

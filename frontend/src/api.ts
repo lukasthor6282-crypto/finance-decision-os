@@ -1,4 +1,4 @@
-import type { AgentReply, CategoryRule, FinanceSummary, Goal, Insight, Transaction, WorkSession } from './types'
+import type { AgentReply, CategoryRule, Commitment, FinanceSummary, Goal, Insight, Transaction, WorkSession } from './types'
 
 const DEFAULT_PRODUCTION_API_URL = 'https://finance-decision-os.onrender.com'
 const API_BASE_URL = resolveApiBaseUrl()
@@ -81,6 +81,10 @@ export function getTransactions(params: Record<string, string | number | undefin
 
 export function getWorkSessions(limit = 200) {
   return request<WorkSession[]>(`/api/work-sessions?limit=${limit}`)
+}
+
+export function getCommitments() {
+  return request<Commitment[]>('/api/commitments')
 }
 
 export function createTransaction(payload: Omit<Transaction, 'id' | 'source'>) {

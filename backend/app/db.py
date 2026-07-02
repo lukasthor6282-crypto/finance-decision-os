@@ -142,6 +142,24 @@ def init_db() -> None:
                 transaction_id INTEGER,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
+
+            CREATE TABLE IF NOT EXISTS commitments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                kind TEXT NOT NULL,
+                description TEXT NOT NULL,
+                normalized_description TEXT NOT NULL,
+                amount REAL NOT NULL,
+                category TEXT NOT NULL,
+                frequency TEXT NOT NULL DEFAULT 'monthly',
+                installments_remaining INTEGER,
+                installments_total INTEGER,
+                due_day INTEGER,
+                active INTEGER NOT NULL DEFAULT 1,
+                source TEXT NOT NULL DEFAULT 'agent',
+                notes TEXT,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
             """
         )
         migrate_db(conn)
@@ -254,6 +272,27 @@ def init_postgres() -> None:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS commitments (
+                id BIGSERIAL PRIMARY KEY,
+                kind TEXT NOT NULL,
+                description TEXT NOT NULL,
+                normalized_description TEXT NOT NULL,
+                amount DOUBLE PRECISION NOT NULL,
+                category TEXT NOT NULL,
+                frequency TEXT NOT NULL DEFAULT 'monthly',
+                installments_remaining INTEGER,
+                installments_total INTEGER,
+                due_day INTEGER,
+                active INTEGER NOT NULL DEFAULT 1,
+                source TEXT NOT NULL DEFAULT 'agent',
+                notes TEXT,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
         migrate_db(conn)
 
 
@@ -291,6 +330,9 @@ def migrate_db(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_category_rules_pattern ON category_rules(pattern)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_learned_patterns_category ON learned_patterns(category)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_work_sessions_date ON work_sessions(date)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_commitments_kind ON commitments(kind)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_commitments_active ON commitments(active)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_commitments_normalized ON commitments(normalized_description)")
     conn.execute(
         """
         CREATE UNIQUE INDEX IF NOT EXISTS idx_work_sessions_unique

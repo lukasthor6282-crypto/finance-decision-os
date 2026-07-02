@@ -126,6 +126,30 @@ def test_agent_records_expense_and_learns_pattern(tmp_path, monkeypatch):
     assert any(pattern["pattern"] == "mercado" and pattern["category"] == "Supermercado" for pattern in patterns)
 
 
+def test_agent_saves_fixed_installment_expense_without_changing_balance(tmp_path, monkeypatch):
+    client = make_empty_client(tmp_path, monkeypatch)
+
+    response = client.post(
+        "/api/agent/chat",
+        json={"message": "guarde essa informacao, de gasto fixo eu tenho 481,60 da parcela do meu celular, tenho mais 11 parcelas a pagar"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["intent"] == "remember_commitment"
+    assert body["data"]["kind"] == "expense"
+    assert body["data"]["amount"] == 481.6
+    assert body["data"]["installments_remaining"] == 11
+    assert body["data"]["futureTotal"] == 5297.6
+
+    commitments = client.get("/api/commitments").json()
+    dashboard = client.get("/api/dashboard").json()
+    assert len(commitments) == 1
+    assert commitments[0]["amount"] == 481.6
+    assert commitments[0]["installments_remaining"] == 11
+    assert dashboard["kpis"]["balance"] == 0
+
+
 def test_summary_excludes_transfers_card_payments_and_offsets_refunds(tmp_path, monkeypatch):
     client = make_empty_client(tmp_path, monkeypatch)
     rows = [

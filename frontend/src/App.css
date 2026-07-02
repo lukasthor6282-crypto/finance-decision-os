@@ -133,6 +133,7 @@ svg {
 .ask-box button,
 .rules-actions button,
 .rule-form button,
+.money-hero button,
 .work-hero button,
 .work-form button,
 .rule-library button {
@@ -188,6 +189,7 @@ svg {
 .ask-box button:hover,
 .rules-actions button:hover,
 .rule-form button:hover,
+.money-hero button:hover,
 .work-hero button:hover,
 .work-form button:hover,
 .rule-library button:hover {
@@ -199,6 +201,7 @@ svg {
 .top-tools button:active,
 .panel-title button:active,
 .ask-box button:active,
+.money-hero button:active,
 .work-hero button:active,
 .work-form button:active {
   transform: scale(0.97);
@@ -904,6 +907,189 @@ svg {
   grid-template-columns: 1fr;
 }
 
+.money-grid {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(320px, 0.78fr) minmax(0, 1fr);
+  grid-template-areas:
+    "hero hero"
+    "kpis kpis"
+    "commitments transactions";
+  gap: 14px;
+}
+
+.money-hero,
+.commitment-panel,
+.money-transactions {
+  border-radius: 16px;
+  padding: 18px;
+}
+
+.money-hero {
+  grid-area: hero;
+  min-height: 148px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 18px;
+}
+
+.money-hero span,
+.commitment-list span,
+.commitment-list p,
+.money-table span,
+.money-table small {
+  color: var(--muted);
+}
+
+.money-hero span {
+  font: 720 12px/1 var(--ui);
+}
+
+.money-hero h1 {
+  margin-top: 10px;
+  color: var(--heading);
+  font: 780 34px/1.05 var(--display);
+}
+
+.money-hero p {
+  max-width: 720px;
+  margin-top: 10px;
+  color: var(--muted);
+  font: 540 14px/1.55 var(--ui);
+}
+
+.money-hero button {
+  min-width: 0;
+  padding: 0 13px;
+  color: var(--text);
+  font: 750 13px/1 var(--ui);
+}
+
+.money-kpis {
+  grid-area: kpis;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.commitment-panel {
+  grid-area: commitments;
+  min-width: 0;
+}
+
+.commitment-list {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.commitment-list article {
+  min-height: 86px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 13px;
+  border: 1px solid oklch(1 0 0 / 0.44);
+  border-radius: 14px;
+  background:
+    linear-gradient(145deg, oklch(1 0 0 / 0.074), oklch(1 0 0 / 0.014)),
+    oklch(1 0 0 / 0.02);
+  box-shadow: inset 0 1px 0 oklch(1 0 0 / 0.48);
+  backdrop-filter: blur(34px) saturate(165%);
+  -webkit-backdrop-filter: blur(34px) saturate(165%);
+  animation: item-rise 220ms var(--ease-out) backwards;
+}
+
+.commitment-list strong {
+  display: block;
+  margin-top: 8px;
+  color: var(--heading);
+  font: 760 14px/1.2 var(--ui);
+}
+
+.commitment-list p {
+  margin-top: 7px;
+  font: 620 12px/1.35 var(--ui);
+}
+
+.commitment-list b,
+.money-table b {
+  font: 780 13px/1 var(--numbers);
+}
+
+.commitment-list b.income,
+.money-table b.income {
+  color: oklch(0.42 0.13 150);
+}
+
+.commitment-list b.expense,
+.money-table b.expense {
+  color: var(--danger);
+}
+
+.commitment-list .empty-money {
+  grid-template-columns: 1fr;
+}
+
+.money-transactions {
+  grid-area: transactions;
+  min-width: 0;
+}
+
+.money-table {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.money-table-head,
+.money-table article {
+  display: grid;
+  grid-template-columns: 110px minmax(180px, 1fr) minmax(120px, 0.5fr) 110px;
+  align-items: center;
+  gap: 12px;
+}
+
+.money-table-head {
+  padding: 0 12px 2px;
+  color: var(--muted);
+  font: 760 11px/1 var(--ui);
+}
+
+.money-table article {
+  min-height: 64px;
+  padding: 12px;
+  border: 1px solid oklch(1 0 0 / 0.44);
+  border-radius: 14px;
+  background: oklch(1 0 0 / 0.026);
+  backdrop-filter: blur(30px) saturate(160%);
+  -webkit-backdrop-filter: blur(30px) saturate(160%);
+  animation: item-rise 220ms var(--ease-out) backwards;
+}
+
+.money-table strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--heading);
+  font: 740 13px/1.2 var(--ui);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.money-table b {
+  text-align: right;
+}
+
+.money-table .empty-row {
+  grid-template-columns: 1fr;
+}
+
 .right-column {
   grid-area: right;
   min-width: 0;
@@ -1404,6 +1590,15 @@ input:focus-visible {
       "sessions";
   }
 
+  .money-grid {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "hero"
+      "kpis"
+      "commitments"
+      "transactions";
+  }
+
   .right-column {
     grid-template-columns: 1fr 1fr;
     grid-template-rows: auto;
@@ -1476,11 +1671,20 @@ input:focus-visible {
     grid-template-columns: 1fr;
   }
 
+  .money-hero {
+    grid-template-columns: 1fr;
+  }
+
   .work-hero button {
     width: 100%;
   }
 
+  .money-hero button {
+    width: 100%;
+  }
+
   .work-kpis,
+  .money-kpis,
   .work-form-row {
     grid-template-columns: 1fr;
   }
@@ -1517,6 +1721,20 @@ input:focus-visible {
 
   .work-table small {
     grid-column: 1;
+  }
+
+  .money-table-head {
+    display: none;
+  }
+
+  .money-table article,
+  .commitment-list article {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .money-table b {
+    text-align: left;
   }
 
   .work-day-list article {
