@@ -6,7 +6,8 @@ from sqlite3 import Connection
 
 from .accounting import ParsedTransaction, parse_transaction_message
 from .analytics import money, scenario, summarize
-from .repository import insert_transaction
+from .repository import existing_work_session, get_float_fact, insert_transaction, insert_work_session, set_fact
+from .worktime import ParsedWorkSession, parse_hourly_rate, parse_work_session_message
 
 
 SYSTEM_PROMPT = """
@@ -17,6 +18,25 @@ Nao ofereca recomendacao financeira profissional; entregue analise educacional e
 
 
 def answer(conn: Connection, message: str) -> dict:
+    hourly_rate = parse_hourly_rate(message)
+    known_hourly_rate = hourly_rate or get_float_fact(conn, "hourly_rate")
+    work_session = parse_work_session_message(message, known_hourly_rate)
+    if work_session:
+        return record_work_session_from_chat(conn, work_session)
+
+    if hourly_rate is not None and any(word in message.lower() for word in ["hora", "/h", "por hora"]):
+        set_fact(conn, "hourly_rate", f"{hourly_rate:.2f}", "money_per_hour", 0.95)
+        return response(
+            intent="remember_hourly_rate",
+            answer=f"Valor/hora salvo: {money(hourly_rate)}. Quando voce disser uma jornada, eu calculo horas, valor bruto e lanço como receita.",
+            actions=[
+                "Exemplo: hoje trabalhei das 14:00 ate 18:40.",
+                "Exemplo: ontem trabalhei 5 horas.",
+            ],
+            confidence=0.94,
+            data={"hourlyRate": hourly_rate},
+        )
+
     parsed = parse_transaction_message(message)
     if parsed:
         return record_transaction_from_chat(conn, parsed)
@@ -49,6 +69,7 @@ def record_transaction_from_chat(conn: Connection, tx: ParsedTransaction) -> dic
     kpis = summary["kpis"]
     direction = "receita" if tx.amount > 0 else "despesa"
     duplicate_line = " Ja existia lancamento igual; nao dupliquei." if result.duplicated else ""
+    next_action = summary["actionPlan"][0]["title"] if summary["actionPlan"] else "Continue registrando entradas e saidas."
 
     return response(
         intent="record_transaction",
@@ -61,7 +82,7 @@ def record_transaction_from_chat(conn: Connection, tx: ParsedTransaction) -> dic
         actions=[
             "Revise categoria se necessario.",
             "Continue registrando entradas e saidas pelo chat.",
-            summary["actionPlan"][0]["title"],
+            next_action,
         ],
         confidence=0.9,
         data={
@@ -74,6 +95,64 @@ def record_transaction_from_chat(conn: Connection, tx: ParsedTransaction) -> dic
             "account": tx.account,
             "balance": kpis["balance"],
             "pattern": tx.pattern,
+        },
+    )
+
+
+def record_work_session_from_chat(conn: Connection, session: ParsedWorkSession) -> dict:
+    set_fact(conn, "hourly_rate", f"{session.hourly_rate:.2f}", "money_per_hour", 0.98)
+    existing = existing_work_session(conn, session)
+    if existing:
+        summary = summarize(conn)
+        return response(
+            intent="record_work_session",
+            answer=(
+                f"Jornada ja registrada: {session.hours:.2f}h a {money(session.hourly_rate)}/h. "
+                f"Nao dupliquei. Saldo atual: {money(summary['kpis']['balance'])}."
+            ),
+            actions=["Se foi outro turno, informe horario diferente.", "Se teve intervalo, diga quantos minutos."],
+            confidence=0.88,
+            data={**session.__dict__, "duplicated": True, "transactionId": existing["transaction_id"]},
+        )
+
+    tx_result = insert_transaction(
+        conn,
+        {
+            "date": session.date,
+            "description": session.description,
+            "amount": session.gross_amount,
+            "category": "Renda",
+            "account": "Principal",
+            "notes": session.notes,
+        },
+        source="work_session",
+    )
+    work_result = insert_work_session(conn, session, tx_result.id)
+    summary = summarize(conn)
+    kpis = summary["kpis"]
+    time_line = ""
+    if session.start_time and session.end_time:
+        time_line = f" ({session.start_time}-{session.end_time})"
+
+    return response(
+        intent="record_work_session",
+        answer=(
+            f"Jornada salva{time_line}: {session.hours:.2f}h x {money(session.hourly_rate)}/h = {money(session.gross_amount)}. "
+            f"Lancei como receita. Saldo agora: {money(kpis['balance'])}. "
+            f"No mes: renda {money(kpis['income'])}, gastos {money(kpis['expenses'])}, liquido {money(kpis['net'])}."
+        ),
+        actions=[
+            "Valor/hora memorizado para proximas jornadas.",
+            "Informe pausas como: com 30 minutos de intervalo.",
+            "Continue registrando receitas e despesas pelo chat.",
+        ],
+        confidence=0.95,
+        data={
+            **session.__dict__,
+            "id": work_result.id,
+            "transactionId": tx_result.id,
+            "duplicated": False,
+            "balance": kpis["balance"],
         },
     )
 
@@ -220,12 +299,13 @@ def local_answer(conn: Connection, summary: dict, message: str) -> dict:
         )
 
     kpis = summary["kpis"]
+    next_action = summary["actionPlan"][0]["title"] if summary["actionPlan"] else "Registre receita, despesa ou horas trabalhadas."
     return response(
         intent="overview",
         answer=(
             f"Mes {summary['month']}: renda {money(kpis['income'])}, gastos {money(kpis['expenses'])}, "
             f"liquido {money(kpis['net'])}, poupanca {kpis['savingsRate']}%. "
-            f"Saude financeira {kpis['healthScore']}/100. Proxima decisao: {summary['actionPlan'][0]['title']}."
+            f"Saude financeira {kpis['healthScore']}/100. Proxima decisao: {next_action}."
         ),
         actions=[item["title"] for item in summary["actionPlan"]],
         confidence=0.74,

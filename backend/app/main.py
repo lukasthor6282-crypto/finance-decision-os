@@ -17,7 +17,7 @@ from .agent import answer
 from .analytics import get_transactions, scenario, summarize
 from .db import connect, init_db, is_postgres
 from .normalization import parse_amount, parse_date
-from .repository import insert_transaction, list_budgets, list_goals, list_learned_patterns
+from .repository import insert_transaction, list_budgets, list_facts, list_goals, list_learned_patterns, list_work_sessions
 from .schemas import AgentRequest, AgentResponse, BudgetIn, GoalIn, GoalPatch, ScenarioRequest, TransactionIn
 from .seed import seed_demo
 
@@ -240,6 +240,18 @@ def api_patterns() -> list[dict]:
         return list_learned_patterns(conn)
 
 
+@app.get("/api/facts")
+def api_facts() -> list[dict]:
+    with connect() as conn:
+        return list_facts(conn)
+
+
+@app.get("/api/work-sessions")
+def api_work_sessions(limit: int = Query(100, ge=1, le=500)) -> list[dict]:
+    with connect() as conn:
+        return list_work_sessions(conn, limit)
+
+
 @app.post("/api/import")
 async def api_import(file: UploadFile = File(...)) -> dict:
     content = await file.read()
@@ -296,7 +308,7 @@ def api_seed() -> dict:
 def api_delete_demo_data() -> dict:
     with connect() as conn:
         deleted = {}
-        for table in ("transactions", "budgets", "goals", "chat_messages", "learned_patterns"):
+        for table in ("transactions", "budgets", "goals", "chat_messages", "learned_patterns", "user_facts", "work_sessions"):
             cursor = conn.execute(f"DELETE FROM {table}")
             deleted[table] = cursor.rowcount
         return {"ok": True, "deleted": deleted}

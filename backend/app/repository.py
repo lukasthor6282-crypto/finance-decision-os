@@ -7,12 +7,20 @@ from sqlite3 import Connection, IntegrityError
 from .classifier import classify
 from .db import is_postgres
 from .normalization import merchant_from_description, normalize_text, transaction_fingerprint
+from .worktime import ParsedWorkSession
 
 
 @dataclass(frozen=True)
 class InsertResult:
     id: int | None
     category: str
+    duplicated: bool = False
+
+
+@dataclass(frozen=True)
+class WorkSessionResult:
+    id: int | None
+    transaction_id: int | None
     duplicated: bool = False
 
 
@@ -136,5 +144,106 @@ def list_learned_patterns(conn: Connection) -> list[dict]:
         ORDER BY usage_count DESC, last_seen DESC
         LIMIT 100
         """
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def set_fact(conn: Connection, key: str, value: str, value_type: str = "text", confidence: float = 1) -> None:
+    conn.execute(
+        """
+        INSERT INTO user_facts (key, value, value_type, confidence, updated_at)
+        VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+        ON CONFLICT(key) DO UPDATE SET
+            value = excluded.value,
+            value_type = excluded.value_type,
+            confidence = excluded.confidence,
+            updated_at = CURRENT_TIMESTAMP
+        """,
+        (key, value, value_type, confidence),
+    )
+
+
+def get_fact(conn: Connection, key: str) -> str | None:
+    row = conn.execute("SELECT value FROM user_facts WHERE key = ?", (key,)).fetchone()
+    return row["value"] if row else None
+
+
+def get_float_fact(conn: Connection, key: str) -> float | None:
+    value = get_fact(conn, key)
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except ValueError:
+        return None
+
+
+def list_facts(conn: Connection) -> list[dict]:
+    rows = conn.execute(
+        """
+        SELECT key, value, value_type, confidence, updated_at, created_at
+        FROM user_facts
+        ORDER BY updated_at DESC
+        """
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def existing_work_session(conn: Connection, session: ParsedWorkSession) -> dict | None:
+    if not session.start_time or not session.end_time:
+        return None
+    row = conn.execute(
+        """
+        SELECT id, transaction_id
+        FROM work_sessions
+        WHERE date = ? AND start_time = ? AND end_time = ?
+        """,
+        (session.date, session.start_time, session.end_time),
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def insert_work_session(conn: Connection, session: ParsedWorkSession, transaction_id: int | None) -> WorkSessionResult:
+    existing = existing_work_session(conn, session)
+    if existing:
+        return WorkSessionResult(existing["id"], existing["transaction_id"], True)
+
+    returning = " RETURNING id" if is_postgres(conn) else ""
+    cursor = conn.execute(
+        f"""
+        INSERT INTO work_sessions (
+            date, start_time, end_time, break_minutes, hourly_rate, hours,
+            gross_amount, description, notes, transaction_id
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        {returning}
+        """,
+        (
+            session.date,
+            session.start_time,
+            session.end_time,
+            session.break_minutes,
+            session.hourly_rate,
+            session.hours,
+            session.gross_amount,
+            session.description,
+            session.notes,
+            transaction_id,
+        ),
+    )
+    session_id = cursor.fetchone()["id"] if is_postgres(conn) else cursor.lastrowid
+    return WorkSessionResult(session_id, transaction_id, False)
+
+
+def list_work_sessions(conn: Connection, limit: int = 100) -> list[dict]:
+    rows = conn.execute(
+        """
+        SELECT id, date, start_time, end_time, break_minutes, hourly_rate, hours,
+               gross_amount, description, notes, transaction_id, created_at
+        FROM work_sessions
+        ORDER BY date DESC, id DESC
+        LIMIT ?
+        """,
+        (limit,),
     ).fetchall()
     return [dict(row) for row in rows]

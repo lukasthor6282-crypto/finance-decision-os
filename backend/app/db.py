@@ -115,6 +115,30 @@ def init_db() -> None:
                 last_seen TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
+
+            CREATE TABLE IF NOT EXISTS user_facts (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL,
+                value_type TEXT NOT NULL DEFAULT 'text',
+                confidence REAL NOT NULL DEFAULT 1,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS work_sessions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                date TEXT NOT NULL,
+                start_time TEXT,
+                end_time TEXT,
+                break_minutes INTEGER NOT NULL DEFAULT 0,
+                hourly_rate REAL NOT NULL,
+                hours REAL NOT NULL,
+                gross_amount REAL NOT NULL,
+                description TEXT NOT NULL,
+                notes TEXT,
+                transaction_id INTEGER,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
             """
         )
         migrate_db(conn)
@@ -183,6 +207,36 @@ def init_postgres() -> None:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS user_facts (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL,
+                value_type TEXT NOT NULL DEFAULT 'text',
+                confidence DOUBLE PRECISION NOT NULL DEFAULT 1,
+                updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS work_sessions (
+                id BIGSERIAL PRIMARY KEY,
+                date TEXT NOT NULL,
+                start_time TEXT,
+                end_time TEXT,
+                break_minutes INTEGER NOT NULL DEFAULT 0,
+                hourly_rate DOUBLE PRECISION NOT NULL,
+                hours DOUBLE PRECISION NOT NULL,
+                gross_amount DOUBLE PRECISION NOT NULL,
+                description TEXT NOT NULL,
+                notes TEXT,
+                transaction_id BIGINT,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
         migrate_db(conn)
 
 
@@ -197,6 +251,14 @@ def migrate_db(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_transactions_category ON transactions(category)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_transactions_account ON transactions(account)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_learned_patterns_category ON learned_patterns(category)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_work_sessions_date ON work_sessions(date)")
+    conn.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_work_sessions_unique
+        ON work_sessions(date, start_time, end_time)
+        WHERE start_time IS NOT NULL AND end_time IS NOT NULL
+        """
+    )
 
 
 def ensure_column(conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:
