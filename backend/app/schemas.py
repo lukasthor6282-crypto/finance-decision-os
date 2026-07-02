@@ -14,6 +14,12 @@ class TransactionIn(BaseModel):
     is_internal: bool | None = None
 
 
+class TransactionPatch(BaseModel):
+    category: str | None = Field(default=None, min_length=2, max_length=80)
+    transaction_type: str | None = Field(default=None, min_length=2, max_length=40)
+    is_internal: bool | None = None
+
+
 class TransactionOut(TransactionIn):
     id: int
     category: str
@@ -61,3 +67,11 @@ class ScenarioRequest(BaseModel):
     description: str = "Compra planejada"
     amount: float = Field(gt=0)
     category: str | None = None
+
+
+class CategoryRuleIn(BaseModel):
+    pattern: str = Field(min_length=2, max_length=120)
+    category: str = Field(min_length=2, max_length=80)
+    transaction_type: str = "expense"
+    is_internal: bool = False
+    priority: int = Field(default=100, ge=0, le=999)

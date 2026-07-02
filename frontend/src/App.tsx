@@ -1,5 +1,5 @@
 import type { FormEvent } from 'react'
-import type { FinanceSummary } from './types'
+import type { CategoryRule, FinanceSummary, Transaction } from './types'
 import {
   Bell,
   Bot,
@@ -11,18 +11,32 @@ import {
   MessageCircle,
   PieChart,
   RefreshCw,
+  RotateCcw,
+  Save,
   Search,
   Send,
   ShieldAlert,
   SlidersHorizontal,
   Sparkles,
+  Tags,
   TrendingDown,
   TrendingUp,
+  Trash2,
   Upload,
   WalletCards,
 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { askAgent, getSummary, importCsv } from './api'
+import {
+  askAgent,
+  createCategoryRule,
+  deleteCategoryRule,
+  getCategoryRules,
+  getSummary,
+  getTransactions,
+  importCsv,
+  reprocessTransactions,
+  updateTransactionCategory,
+} from './api'
 import './App.css'
 
 type ChatMessage = {
@@ -34,6 +48,7 @@ const navItems = [
   { label: 'Hoje', icon: <Home size={19} /> },
   { label: 'Fluxo', icon: <TrendingUp size={19} /> },
   { label: 'Categorias', icon: <PieChart size={19} /> },
+  { label: 'Regras', icon: <Tags size={19} /> },
   { label: 'Dados', icon: <Database size={19} /> },
 ]
 
@@ -47,6 +62,33 @@ const fallbackMessages: ChatMessage[] = [
 const money = (value = 0) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
 
+const BASE_CATEGORIES = [
+  'Alimentacao',
+  'Supermercado',
+  'Transporte',
+  'Moradia',
+  'Assinaturas',
+  'Saude',
+  'Educacao',
+  'Receita',
+  'Transferencia',
+  'Cartao',
+  'Estorno',
+  'Investimentos',
+  'Outros',
+]
+
+const TRANSACTION_TYPES = [
+  { value: 'expense', label: 'Despesa' },
+  { value: 'income', label: 'Receita' },
+  { value: 'transfer', label: 'Transferencia' },
+  { value: 'card_payment', label: 'Fatura/cartao' },
+  { value: 'refund', label: 'Estorno' },
+  { value: 'investment', label: 'Investimento' },
+]
+
+const INTERNAL_TYPES = new Set(['transfer', 'card_payment', 'investment'])
+
 function App() {
   const [summary, setSummary] = useState<FinanceSummary | null>(null)
   const [messages, setMessages] = useState<ChatMessage[]>(fallbackMessages)
@@ -55,6 +97,16 @@ function App() {
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [transactions, setTransactions] = useState<Transaction[]>([])
+  const [categoryRules, setCategoryRules] = useState<CategoryRule[]>([])
+  const [rulesLoading, setRulesLoading] = useState(false)
+  const [notice, setNotice] = useState('')
+  const [ruleForm, setRuleForm] = useState({
+    pattern: '',
+    category: 'Alimentacao',
+    transaction_type: 'expense',
+    is_internal: false,
+  })
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const loadDashboard = async () => {
@@ -82,6 +134,27 @@ function App() {
   useEffect(() => {
     void loadDashboard()
   }, [])
+
+  const loadRulesData = async () => {
+    setRulesLoading(true)
+    setError('')
+    try {
+      const [nextTransactions, nextRules] = await Promise.all([
+        getTransactions({ limit: 80 }),
+        getCategoryRules(),
+      ])
+      setTransactions(nextTransactions)
+      setCategoryRules(nextRules)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Falha ao carregar regras')
+    } finally {
+      setRulesLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (activeNav === 'Regras') void loadRulesData()
+  }, [activeNav])
 
   const decisions = useMemo(() => {
     return (summary?.actionPlan ?? []).slice(0, 3).map((item) => ({
@@ -130,6 +203,14 @@ function App() {
       width: `${Math.min(Math.max(budget.projectedRatio, 8), 100)}%`,
     }))
   }, [summary])
+
+  const categoryOptions = useMemo(() => {
+    const values = new Set(BASE_CATEGORIES)
+    summary?.categorySpend.forEach((item) => values.add(item.category))
+    transactions.forEach((item) => values.add(item.category))
+    categoryRules.forEach((item) => values.add(item.category))
+    return Array.from(values).sort((a, b) => a.localeCompare(b))
+  }, [categoryRules, summary, transactions])
 
   const todayLabel = new Intl.DateTimeFormat('pt-BR', {
     weekday: 'long',
@@ -183,6 +264,82 @@ function App() {
     }
   }
 
+  const handleTransactionPatch = async (transaction: Transaction, patch: Partial<Transaction>) => {
+    setBusy(true)
+    setNotice('')
+    try {
+      const type = String(patch.transaction_type ?? transaction.transaction_type ?? 'expense')
+      const isInternal = patch.is_internal ?? INTERNAL_TYPES.has(type)
+      const result = await updateTransactionCategory(transaction.id, {
+        category: String(patch.category ?? transaction.category),
+        transaction_type: type,
+        is_internal: isInternal,
+      })
+      setTransactions((current) =>
+        current.map((item) =>
+          item.id === transaction.id
+            ? { ...item, category: result.category, transaction_type: result.transaction_type, is_internal: result.is_internal, category_locked: true }
+            : item,
+        ),
+      )
+      setNotice('Categoria salva. Essa transacao ficou protegida do reprocessamento.')
+      void loadDashboard()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Falha ao salvar categoria')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleRuleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!ruleForm.pattern.trim()) return
+    setBusy(true)
+    setNotice('')
+    try {
+      await createCategoryRule({
+        ...ruleForm,
+        is_internal: ruleForm.is_internal || INTERNAL_TYPES.has(ruleForm.transaction_type),
+      })
+      setRuleForm((current) => ({ ...current, pattern: '' }))
+      setNotice('Regra salva. Use reprocessar para aplicar em lancamentos antigos.')
+      await loadRulesData()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Falha ao salvar regra')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleDeleteRule = async (rule: CategoryRule) => {
+    if (!rule.id || rule.source !== 'custom') return
+    setBusy(true)
+    setNotice('')
+    try {
+      await deleteCategoryRule(rule.id)
+      setNotice('Regra apagada.')
+      await loadRulesData()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Falha ao apagar regra')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleReprocess = async () => {
+    setBusy(true)
+    setNotice('')
+    try {
+      const result = await reprocessTransactions()
+      setNotice(`${result.updated} transacoes reprocessadas. Edicoes manuais preservadas.`)
+      await Promise.all([loadDashboard(), loadRulesData()])
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Falha ao reprocessar')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
     <div className="os-shell">
       <aside className="side-rail glass-sheet" aria-label="Navegacao">
@@ -232,6 +389,157 @@ function App() {
           </div>
         </header>
 
+        {activeNav === 'Regras' ? (
+          <main className="rules-grid">
+            <section className="rules-hero glass-panel">
+              <div>
+                <span>Controle de dados</span>
+                <h1>Categorias e regras</h1>
+                <p>Corrija uma transacao, crie uma palavra-chave e reprocesse os lancamentos antigos sem apagar suas edicoes manuais.</p>
+              </div>
+              <div className="rules-actions">
+                <button type="button" onClick={() => void loadRulesData()} disabled={rulesLoading || busy}>
+                  <RefreshCw size={16} /> Atualizar
+                </button>
+                <button type="button" onClick={() => void handleReprocess()} disabled={rulesLoading || busy}>
+                  <RotateCcw size={16} /> Reprocessar
+                </button>
+              </div>
+              {(notice || error) && <p className={error ? 'rules-feedback danger' : 'rules-feedback'}>{error || notice}</p>}
+            </section>
+
+            <section className="rules-transactions glass-panel">
+              <div className="panel-title">
+                <h2>Transacoes recentes</h2>
+                <span>{transactions.length} itens</span>
+              </div>
+              <div className="rules-table" aria-label="Editar categorias de transacoes">
+                <div className="rules-table-head">
+                  <span>Data</span>
+                  <span>Descricao</span>
+                  <span>Categoria</span>
+                  <span>Tipo</span>
+                </div>
+                {transactions.map((transaction) => (
+                  <article key={transaction.id}>
+                    <span>{transaction.date.slice(5)}</span>
+                    <strong title={transaction.description}>{transaction.description}</strong>
+                    <label>
+                      <span>Categoria</span>
+                      <select
+                        value={transaction.category}
+                        onChange={(event) => void handleTransactionPatch(transaction, { category: event.target.value })}
+                        disabled={busy}
+                      >
+                        {categoryOptions.map((category) => (
+                          <option key={category} value={category}>{category}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      <span>Tipo</span>
+                      <select
+                        value={transaction.transaction_type ?? 'expense'}
+                        onChange={(event) => void handleTransactionPatch(transaction, { transaction_type: event.target.value })}
+                        disabled={busy}
+                      >
+                        {TRANSACTION_TYPES.map((type) => (
+                          <option key={type.value} value={type.value}>{type.label}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <small>{transaction.category_locked ? 'manual' : 'auto'} · {money(transaction.amount)}</small>
+                  </article>
+                ))}
+                {!transactions.length && (
+                  <article className="empty-row">
+                    <strong>Nenhuma transacao ainda</strong>
+                    <small>Importe CSV ou registre pelo chat.</small>
+                  </article>
+                )}
+              </div>
+            </section>
+
+            <form className="rule-form glass-panel" onSubmit={handleRuleSubmit}>
+              <div className="panel-title">
+                <h2>Nova regra</h2>
+                <span>palavra-chave</span>
+              </div>
+              <label>
+                Palavra ou texto da descricao
+                <input
+                  value={ruleForm.pattern}
+                  placeholder="Ex.: academia, nubank, ifood"
+                  onChange={(event) => setRuleForm((current) => ({ ...current, pattern: event.target.value }))}
+                />
+              </label>
+              <label>
+                Categoria
+                <select
+                  value={ruleForm.category}
+                  onChange={(event) => setRuleForm((current) => ({ ...current, category: event.target.value }))}
+                >
+                  {categoryOptions.map((category) => (
+                    <option key={category} value={category}>{category}</option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Tipo financeiro
+                <select
+                  value={ruleForm.transaction_type}
+                  onChange={(event) =>
+                    setRuleForm((current) => ({
+                      ...current,
+                      transaction_type: event.target.value,
+                      is_internal: INTERNAL_TYPES.has(event.target.value),
+                    }))
+                  }
+                >
+                  {TRANSACTION_TYPES.map((type) => (
+                    <option key={type.value} value={type.value}>{type.label}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="check-line">
+                <input
+                  type="checkbox"
+                  checked={ruleForm.is_internal}
+                  onChange={(event) => setRuleForm((current) => ({ ...current, is_internal: event.target.checked }))}
+                />
+                Nao contar no fluxo real
+              </label>
+              <button type="submit" disabled={busy || !ruleForm.pattern.trim()}>
+                <Save size={16} /> Salvar regra
+              </button>
+            </form>
+
+            <section className="rule-library glass-panel">
+              <div className="panel-title">
+                <h2>Biblioteca</h2>
+                <span>{categoryRules.filter((rule) => rule.source === 'custom').length} pessoais</span>
+              </div>
+              <div className="rule-list">
+                {categoryRules.map((rule) => (
+                  <article key={`${rule.source}-${rule.id ?? rule.category}`}>
+                    <div>
+                      <span>{rule.source === 'custom' ? 'pessoal' : 'sistema'} · {rule.transaction_type}</span>
+                      <strong>{rule.category}</strong>
+                      <p>{rule.patterns.slice(0, 5).join(', ')}</p>
+                    </div>
+                    {rule.source === 'custom' && rule.id ? (
+                      <button type="button" aria-label={`Apagar regra ${rule.pattern}`} onClick={() => void handleDeleteRule(rule)} disabled={busy}>
+                        <Trash2 size={16} />
+                      </button>
+                    ) : (
+                      <small>fixa</small>
+                    )}
+                  </article>
+                ))}
+              </div>
+            </section>
+          </main>
+        ) : (
         <main className="personal-grid">
           <section className="assistant-pane glass-panel" aria-label="Agente financeiro pessoal">
             <div className="assistant-head">
@@ -379,6 +687,7 @@ function App() {
             </div>
           </section>
         </main>
+        )}
       </section>
     </div>
   )

@@ -5,7 +5,8 @@ p {
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
 }
 
@@ -129,7 +130,10 @@ svg {
 .side-rail button,
 .top-tools button,
 .panel-title button,
-.ask-box button {
+.ask-box button,
+.rules-actions button,
+.rule-form button,
+.rule-library button {
   position: relative;
   z-index: 1;
   min-width: 44px;
@@ -179,7 +183,10 @@ svg {
 .side-rail button:hover,
 .top-tools button:hover,
 .panel-title button:hover,
-.ask-box button:hover {
+.ask-box button:hover,
+.rules-actions button:hover,
+.rule-form button:hover,
+.rule-library button:hover {
   background: oklch(1 0 0 / 0.06);
 }
 
@@ -447,6 +454,265 @@ svg {
 .ask-box button {
   border-radius: 14px;
   padding: 0;
+}
+
+.rules-grid {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(320px, 0.75fr);
+  grid-template-areas:
+    "hero hero"
+    "transactions form"
+    "transactions library";
+  gap: 14px;
+}
+
+.rules-hero,
+.rules-transactions,
+.rule-form,
+.rule-library {
+  border-radius: 16px;
+  padding: 18px;
+}
+
+.rules-hero {
+  grid-area: hero;
+  min-height: 156px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 18px;
+}
+
+.rules-hero span {
+  color: var(--muted);
+  font: 720 12px/1 var(--ui);
+}
+
+.rules-hero h1 {
+  margin-top: 10px;
+  color: var(--heading);
+  font: 780 34px/1.05 var(--display);
+}
+
+.rules-hero p {
+  max-width: 760px;
+  margin-top: 10px;
+  color: var(--muted);
+  font: 540 14px/1.55 var(--ui);
+}
+
+.rules-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.rules-actions button,
+.rule-form button {
+  min-width: 0;
+  padding: 0 13px;
+  color: var(--text);
+  font: 750 13px/1 var(--ui);
+}
+
+.rules-feedback {
+  grid-column: 1 / -1;
+  width: fit-content;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid oklch(1 0 0 / 0.46);
+  border-radius: 999px;
+  background: oklch(1 0 0 / 0.035);
+  color: var(--heading) !important;
+  font: 700 12px/1.25 var(--ui) !important;
+}
+
+.rules-feedback.danger {
+  color: var(--danger) !important;
+}
+
+.rules-transactions {
+  grid-area: transactions;
+  min-width: 0;
+}
+
+.rules-table {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.rules-table-head,
+.rules-table article {
+  display: grid;
+  grid-template-columns: 74px minmax(180px, 1fr) minmax(150px, 0.7fr) minmax(150px, 0.7fr);
+  align-items: center;
+  gap: 12px;
+}
+
+.rules-table-head {
+  padding: 0 12px 2px;
+  color: var(--muted);
+  font: 760 11px/1 var(--ui);
+}
+
+.rules-table article {
+  min-height: 70px;
+  padding: 12px;
+  border: 1px solid oklch(1 0 0 / 0.44);
+  border-radius: 14px;
+  background:
+    linear-gradient(145deg, oklch(1 0 0 / 0.074), oklch(1 0 0 / 0.014)),
+    oklch(1 0 0 / 0.02);
+  box-shadow: inset 0 1px 0 oklch(1 0 0 / 0.48);
+  backdrop-filter: blur(34px) saturate(165%);
+  -webkit-backdrop-filter: blur(34px) saturate(165%);
+  animation: item-rise 220ms var(--ease-out) backwards;
+}
+
+.rules-table article > span,
+.rules-table small,
+.rule-list span,
+.rule-list p {
+  color: var(--muted);
+}
+
+.rules-table strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--heading);
+  font: 740 13px/1.25 var(--ui);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rules-table label,
+.rule-form label {
+  display: grid;
+  gap: 7px;
+  color: var(--text);
+  font: 720 12px/1 var(--ui);
+}
+
+.rules-table label > span {
+  display: none;
+}
+
+.rules-table select,
+.rule-form select,
+.rule-form input:not([type='checkbox']) {
+  width: 100%;
+  min-height: 44px;
+  color: var(--heading);
+  border: 1px solid oklch(1 0 0 / 0.5);
+  border-radius: 13px;
+  outline: 0;
+  background:
+    linear-gradient(145deg, oklch(1 0 0 / 0.09), oklch(1 0 0 / 0.018)),
+    oklch(1 0 0 / 0.04);
+  box-shadow:
+    inset 0 1px 0 oklch(1 0 0 / 0.5),
+    inset 0 -1px 0 oklch(1 0 0 / 0.08);
+  padding: 0 12px;
+}
+
+.rules-table select:focus,
+.rule-form select:focus,
+.rule-form input:focus {
+  border-color: oklch(0.32 0 0 / 0.38);
+}
+
+.rules-table small {
+  grid-column: 2 / -1;
+  font: 680 11px/1 var(--ui);
+}
+
+.rules-table .empty-row {
+  grid-template-columns: 1fr;
+}
+
+.rule-form {
+  grid-area: form;
+  display: grid;
+  align-content: start;
+  gap: 14px;
+}
+
+.check-line {
+  display: flex !important;
+  grid-template-columns: none !important;
+  align-items: center;
+  gap: 10px !important;
+}
+
+.check-line input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+}
+
+.rule-form button {
+  width: 100%;
+  margin-top: 2px;
+}
+
+.rule-library {
+  grid-area: library;
+  min-width: 0;
+}
+
+.rule-list {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 10px;
+  max-height: 520px;
+  overflow: auto;
+  margin-top: 16px;
+  padding-right: 4px;
+}
+
+.rule-list article {
+  min-height: 76px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 44px;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid oklch(1 0 0 / 0.44);
+  border-radius: 14px;
+  background: oklch(1 0 0 / 0.026);
+  backdrop-filter: blur(30px) saturate(160%);
+  -webkit-backdrop-filter: blur(30px) saturate(160%);
+}
+
+.rule-list strong {
+  display: block;
+  margin-top: 7px;
+  color: var(--heading);
+  font: 760 14px/1 var(--ui);
+}
+
+.rule-list span,
+.rule-list p,
+.rule-list small {
+  font: 680 11px/1.35 var(--ui);
+}
+
+.rule-list p {
+  min-width: 0;
+  overflow: hidden;
+  margin-top: 7px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rule-library button {
+  border-radius: 13px;
+  color: var(--danger);
 }
 
 .right-column {
@@ -930,6 +1196,15 @@ input:focus-visible {
       "notes";
   }
 
+  .rules-grid {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "hero"
+      "form"
+      "transactions"
+      "library";
+  }
+
   .right-column {
     grid-template-columns: 1fr 1fr;
     grid-template-rows: auto;
@@ -988,6 +1263,35 @@ input:focus-visible {
   .right-column,
   .card-strip {
     grid-template-columns: 1fr;
+  }
+
+  .rules-hero {
+    grid-template-columns: 1fr;
+  }
+
+  .rules-actions {
+    width: 100%;
+  }
+
+  .rules-actions button {
+    flex: 1;
+  }
+
+  .rules-table-head {
+    display: none;
+  }
+
+  .rules-table article {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .rules-table label > span {
+    display: block;
+  }
+
+  .rules-table small {
+    grid-column: 1;
   }
 
   .risk-row {

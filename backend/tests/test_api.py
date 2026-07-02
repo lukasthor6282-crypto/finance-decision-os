@@ -181,6 +181,36 @@ def test_agent_answers_largest_expense_without_internal_payments(tmp_path, monke
     assert "mercado" in body["data"]["transaction"]["description"]
 
 
+def test_category_rules_reprocess_and_manual_lock(tmp_path, monkeypatch):
+    client = make_empty_client(tmp_path, monkeypatch)
+    created_tx = client.post(
+        "/api/transactions",
+        json={"date": "2026-07-01", "description": "academia mensal", "amount": -90},
+    ).json()
+
+    rule = client.post(
+        "/api/category-rules",
+        json={"pattern": "academia", "category": "Saude", "transaction_type": "expense", "is_internal": False},
+    )
+    assert rule.status_code == 200
+    assert rule.json()["source"] == "custom"
+
+    reprocessed = client.post("/api/transactions/reprocess")
+    assert reprocessed.status_code == 200
+    assert reprocessed.json()["updated"] == 1
+    tx = client.get("/api/transactions", params={"search": "academia"}).json()[0]
+    assert tx["category"] == "Saude"
+
+    patched = client.patch(f"/api/transactions/{created_tx['id']}", json={"category": "Outros"})
+    assert patched.status_code == 200
+    assert patched.json()["category"] == "Outros"
+
+    client.post("/api/transactions/reprocess")
+    tx = client.get("/api/transactions", params={"search": "academia"}).json()[0]
+    assert tx["category"] == "Outros"
+    assert tx["category_locked"] == 1
+
+
 def test_agent_calculates_hourly_work_session_from_message(tmp_path, monkeypatch):
     client = make_empty_client(tmp_path, monkeypatch)
 

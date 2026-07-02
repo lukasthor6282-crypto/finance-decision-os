@@ -1,4 +1,4 @@
-import type { AgentReply, FinanceSummary, Goal, Insight, Transaction } from './types'
+import type { AgentReply, CategoryRule, FinanceSummary, Goal, Insight, Transaction } from './types'
 
 const DEFAULT_PRODUCTION_API_URL = 'https://finance-decision-os.onrender.com'
 const API_BASE_URL = resolveApiBaseUrl()
@@ -87,6 +87,23 @@ export function createTransaction(payload: Omit<Transaction, 'id' | 'source'>) {
   })
 }
 
+export function updateTransactionCategory(
+  id: number,
+  payload: Pick<Transaction, 'category'> & Partial<Pick<Transaction, 'transaction_type' | 'is_internal'>>,
+) {
+  return request<{ id: number; category: string; transaction_type: string; is_internal: boolean }>(`/api/transactions/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+}
+
+export function reprocessTransactions() {
+  return request<{ ok: boolean; updated: number; preservedManual: boolean }>('/api/transactions/reprocess', {
+    method: 'POST',
+  })
+}
+
 export function askAgent(message: string) {
   return request<AgentReply>('/api/agent/chat', {
     method: 'POST',
@@ -101,6 +118,29 @@ export function importCsv(file: File) {
   return request<{ imported: number; duplicated: number; skipped: number }>('/api/import', {
     method: 'POST',
     body,
+  })
+}
+
+export function getCategoryRules() {
+  return request<CategoryRule[]>('/api/category-rules')
+}
+
+export function createCategoryRule(payload: {
+  pattern: string
+  category: string
+  transaction_type: string
+  is_internal: boolean
+}) {
+  return request<CategoryRule>('/api/category-rules', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+}
+
+export function deleteCategoryRule(id: number) {
+  return request<{ ok: boolean }>(`/api/category-rules/${id}`, {
+    method: 'DELETE',
   })
 }
 

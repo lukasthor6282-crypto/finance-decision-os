@@ -81,6 +81,7 @@ def init_db() -> None:
                 account TEXT NOT NULL DEFAULT 'Principal',
                 source TEXT NOT NULL DEFAULT 'manual',
                 notes TEXT,
+                category_locked INTEGER NOT NULL DEFAULT 0,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
 
@@ -159,6 +160,20 @@ def init_postgres() -> None:
                 account TEXT NOT NULL DEFAULT 'Principal',
                 source TEXT NOT NULL DEFAULT 'manual',
                 notes TEXT,
+                category_locked INTEGER NOT NULL DEFAULT 0,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS category_rules (
+                id BIGSERIAL PRIMARY KEY,
+                pattern TEXT NOT NULL UNIQUE,
+                category TEXT NOT NULL,
+                transaction_type TEXT NOT NULL DEFAULT 'expense',
+                is_internal INTEGER NOT NULL DEFAULT 0,
+                priority INTEGER NOT NULL DEFAULT 100,
                 created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
             """
@@ -243,6 +258,20 @@ def init_postgres() -> None:
 
 
 def migrate_db(conn: sqlite3.Connection) -> None:
+    if not is_postgres(conn):
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS category_rules (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                pattern TEXT NOT NULL UNIQUE,
+                category TEXT NOT NULL,
+                transaction_type TEXT NOT NULL DEFAULT 'expense',
+                is_internal INTEGER NOT NULL DEFAULT 0,
+                priority INTEGER NOT NULL DEFAULT 100,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
     ensure_column(conn, "transactions", "merchant", "TEXT")
     ensure_column(conn, "transactions", "normalized_description", "TEXT")
     ensure_column(conn, "transactions", "fingerprint", "TEXT")
@@ -250,6 +279,7 @@ def migrate_db(conn: sqlite3.Connection) -> None:
     ensure_column(conn, "transactions", "transaction_type", "TEXT NOT NULL DEFAULT 'unknown'")
     ensure_column(conn, "transactions", "is_internal", "INTEGER NOT NULL DEFAULT 0")
     ensure_column(conn, "transactions", "duplicate_group", "TEXT")
+    ensure_column(conn, "transactions", "category_locked", "INTEGER NOT NULL DEFAULT 0")
     backfill_transactions(conn)
     conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_transactions_fingerprint ON transactions(fingerprint)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date)")
@@ -257,6 +287,8 @@ def migrate_db(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_transactions_account ON transactions(account)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_transactions_type ON transactions(transaction_type)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_transactions_duplicate_group ON transactions(duplicate_group)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_transactions_category_locked ON transactions(category_locked)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_category_rules_pattern ON category_rules(pattern)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_learned_patterns_category ON learned_patterns(category)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_work_sessions_date ON work_sessions(date)")
     conn.execute(

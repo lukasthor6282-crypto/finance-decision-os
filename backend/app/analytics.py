@@ -68,7 +68,7 @@ def get_transactions(
     rows = conn.execute(
         f"""
         SELECT id, date, description, amount, category, account, source, notes,
-               merchant, normalized_description, is_recurring, transaction_type, is_internal, duplicate_group
+               merchant, normalized_description, is_recurring, transaction_type, is_internal, duplicate_group, category_locked
         FROM transactions
         {where}
         ORDER BY date DESC, id DESC

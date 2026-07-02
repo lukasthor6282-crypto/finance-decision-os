@@ -15,11 +15,22 @@ from fastapi.staticfiles import StaticFiles
 
 from .agent import answer
 from .analytics import get_transactions, scenario, summarize
-from .categorizer import editable_rules
 from .db import connect, init_db, is_postgres
 from .normalization import parse_amount, parse_date
-from .repository import insert_transaction, list_budgets, list_facts, list_goals, list_learned_patterns, list_work_sessions
-from .schemas import AgentRequest, AgentResponse, BudgetIn, GoalIn, GoalPatch, ScenarioRequest, TransactionIn
+from .repository import (
+    create_category_rule,
+    delete_category_rule,
+    insert_transaction,
+    list_budgets,
+    list_category_rules,
+    list_facts,
+    list_goals,
+    list_learned_patterns,
+    list_work_sessions,
+    reprocess_transactions,
+    update_transaction_category,
+)
+from .schemas import AgentRequest, AgentResponse, BudgetIn, CategoryRuleIn, GoalIn, GoalPatch, ScenarioRequest, TransactionIn, TransactionPatch
 from .seed import seed_demo
 
 
@@ -156,6 +167,27 @@ def api_delete_transaction(transaction_id: int) -> dict:
         return {"ok": True}
 
 
+@app.patch("/api/transactions/{transaction_id}")
+def api_update_transaction(transaction_id: int, payload: TransactionPatch) -> dict:
+    with connect() as conn:
+        result = update_transaction_category(
+            conn,
+            transaction_id,
+            payload.category,
+            payload.transaction_type,
+            payload.is_internal,
+        )
+        if not result:
+            raise HTTPException(404, "transacao nao encontrada")
+        return result
+
+
+@app.post("/api/transactions/reprocess")
+def api_reprocess_transactions(include_locked: bool = False) -> dict:
+    with connect() as conn:
+        return reprocess_transactions(conn, include_locked)
+
+
 @app.get("/api/budgets")
 def api_budgets() -> list[dict]:
     with connect() as conn:
@@ -241,7 +273,25 @@ def api_categories() -> list[dict]:
 
 @app.get("/api/category-rules")
 def api_category_rules() -> list[dict]:
-    return editable_rules()
+    with connect() as conn:
+        return list_category_rules(conn)
+
+
+@app.post("/api/category-rules")
+def api_create_category_rule(payload: CategoryRuleIn) -> dict:
+    with connect() as conn:
+        try:
+            return create_category_rule(conn, payload.model_dump())
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+
+
+@app.delete("/api/category-rules/{rule_id}")
+def api_delete_category_rule(rule_id: int) -> dict:
+    with connect() as conn:
+        if not delete_category_rule(conn, rule_id):
+            raise HTTPException(404, "regra nao encontrada")
+        return {"ok": True}
 
 
 @app.get("/api/patterns")

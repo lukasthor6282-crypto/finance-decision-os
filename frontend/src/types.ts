@@ -32,6 +32,7 @@ export type Transaction = {
   transaction_type?: string
   is_internal?: number | boolean
   duplicate_group?: string
+  category_locked?: number | boolean
 }
 
 export type MonthlyPoint = {
@@ -92,6 +93,18 @@ export type AlertItem = {
   message: string
   action?: string
   data?: unknown
+}
+
+export type CategoryRule = {
+  id: number | null
+  pattern: string
+  category: string
+  transaction_type: string
+  is_internal: number | boolean
+  priority: number
+  created_at: string | null
+  source: 'custom' | 'system'
+  patterns: string[]
 }
 
 export type RecurringExpense = {
