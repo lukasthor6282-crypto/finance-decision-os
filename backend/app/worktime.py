@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 
@@ -12,8 +13,6 @@ WEEKDAYS = {
     "segunda feira": 0,
     "terca": 1,
     "terca feira": 1,
-    "terça": 1,
-    "terça feira": 1,
     "quarta": 2,
     "quarta feira": 2,
     "quinta": 3,
@@ -21,7 +20,6 @@ WEEKDAYS = {
     "sexta": 4,
     "sexta feira": 4,
     "sabado": 5,
-    "sábado": 5,
     "domingo": 6,
 }
 
@@ -40,10 +38,10 @@ class ParsedWorkSession:
 
 
 def parse_hourly_rate(message: str) -> float | None:
-    text = message.lower()
+    text = normalize_work_text(message)
     patterns = [
         r"(?:ganho|recebo|cobro)\s*(?:r\$\s*)?(\d+(?:[.,]\d{1,2})?)\s*(?:r\$|reais|real)?\s*(?:por hora|/h|hora)\b",
-        r"(?:minha hora(?:\s+e| é)?|valor da hora(?:\s+e| é)?|hora(?:\s+e| é)?)\s*(?:r\$\s*)?(\d+(?:[.,]\d{1,2})?)\s*(?:r\$|reais|real)?",
+        r"(?:minha hora(?:\s+e)?|valor da hora(?:\s+e)?|hora(?:\s+e)?)\s*(?:r\$\s*)?(\d+(?:[.,]\d{1,2})?)\s*(?:r\$|reais|real)?",
         r"(?:r\$\s*)?(\d+(?:[.,]\d{1,2})?)\s*(?:r\$|reais|real)?\s*(?:por hora|/h)\b",
     ]
     for pattern in patterns:
@@ -58,18 +56,18 @@ def parse_hourly_rate(message: str) -> float | None:
 
 
 def parse_work_session_message(message: str, known_hourly_rate: float | None = None) -> ParsedWorkSession | None:
-    text = " ".join(message.strip().split())
-    lower = text.lower()
-    if not any(word in lower for word in ["trabalhei", "trabalho", "jornada", "turno", "hora trabalhada", "horas trabalhadas"]):
+    original = " ".join(message.strip().split())
+    text = normalize_work_text(original)
+    if not any(word in text for word in ["trabalhei", "trabalho", "jornada", "turno", "hora trabalhada", "horas trabalhadas"]):
         return None
 
-    hourly_rate = parse_hourly_rate(text) or known_hourly_rate
+    hourly_rate = parse_hourly_rate(original) or known_hourly_rate
     if hourly_rate is None:
         return None
 
-    tx_date = infer_work_date(lower)
-    break_minutes = infer_break_minutes(lower)
-    interval = extract_time_interval(lower)
+    tx_date = infer_work_date(text)
+    break_minutes = infer_break_minutes(text)
+    interval = extract_time_interval(text)
     if interval:
         start_time, end_time = interval
         minutes = minutes_between(start_time, end_time) - break_minutes
@@ -78,7 +76,7 @@ def parse_work_session_message(message: str, known_hourly_rate: float | None = N
         hours = round(minutes / 60, 4)
         description = f"Horas trabalhadas {start_time}-{end_time}"
     else:
-        duration = extract_duration_hours(lower)
+        duration = extract_duration_hours(text)
         if duration is None:
             return None
         start_time = None
@@ -98,20 +96,21 @@ def parse_work_session_message(message: str, known_hourly_rate: float | None = N
         hours=hours,
         gross_amount=gross_amount,
         description=description,
-        notes=f"registrado pelo chat: {text}",
+        notes=f"registrado pelo chat: {original}",
     )
 
 
 def infer_work_date(text: str) -> str:
+    clean = normalize_work_text(text)
     today = date.today()
-    if "hoje" in text:
+    if "hoje" in clean:
         return today.isoformat()
-    if "ontem" in text:
+    if "ontem" in clean:
         return (today - timedelta(days=1)).isoformat()
-    if "anteontem" in text:
+    if "anteontem" in clean:
         return (today - timedelta(days=2)).isoformat()
 
-    match = re.search(r"\b(\d{1,2})[/-](\d{1,2})(?:[/-](\d{2,4}))?\b", text)
+    match = re.search(r"\b(\d{1,2})[/-](\d{1,2})(?:[/-](\d{2,4}))?\b", clean)
     if match:
         day = int(match.group(1))
         month = int(match.group(2))
@@ -124,7 +123,7 @@ def infer_work_date(text: str) -> str:
             return today.isoformat()
 
     for label, weekday in WEEKDAYS.items():
-        if label in text:
+        if re.search(rf"\b{re.escape(label)}\b", clean):
             delta = (today.weekday() - weekday) % 7
             return (today - timedelta(days=delta)).isoformat()
 
@@ -132,22 +131,24 @@ def infer_work_date(text: str) -> str:
 
 
 def infer_break_minutes(text: str) -> int:
-    match = re.search(r"(?:intervalo|pausa|almoco|almoço)\D{0,12}(\d{1,3})\s*(?:min|minutos)", text)
+    clean = normalize_work_text(text)
+    match = re.search(r"(?:intervalo|pausa|almoco)\D{0,12}(\d{1,3})\s*(?:min|minutos)", clean)
     if match:
         return int(match.group(1))
-    match = re.search(r"(\d{1,3})\s*(?:min|minutos)\D{0,12}(?:intervalo|pausa|almoco|almoço)", text)
+    match = re.search(r"(\d{1,3})\s*(?:min|minutos)\D{0,12}(?:intervalo|pausa|almoco)", clean)
     if match:
         return int(match.group(1))
     return 0
 
 
 def extract_time_interval(text: str) -> tuple[str, str] | None:
+    clean = normalize_work_text(text)
     patterns = [
-        r"(?:das|de)\s*(\d{1,2}(?::\d{2}|h\d{0,2})?)\s*(?:ate|até|as|às|a)\s*(?:as|às)?\s*(\d{1,2}(?::\d{2}|h\d{0,2})?)",
-        r"(\d{1,2}(?::\d{2}|h\d{0,2})?)\s*(?:ate|até|as|às|a)\s*(\d{1,2}(?::\d{2}|h\d{0,2})?)",
+        r"(?:das|de)\s*(\d{1,2}(?::\d{2}|h\d{0,2})?)\s*(?:ate|as|a)\s*(?:as)?\s*(\d{1,2}(?::\d{2}|h\d{0,2})?)",
+        r"(\d{1,2}(?::\d{2}|h\d{0,2})?)\s*(?:ate|as|a)\s*(\d{1,2}(?::\d{2}|h\d{0,2})?)",
     ]
     for pattern in patterns:
-        match = re.search(pattern, text, re.IGNORECASE)
+        match = re.search(pattern, clean, re.IGNORECASE)
         if not match:
             continue
         start = normalize_time(match.group(1))
@@ -158,10 +159,11 @@ def extract_time_interval(text: str) -> tuple[str, str] | None:
 
 
 def extract_duration_hours(text: str) -> float | None:
-    match = re.search(r"(\d+(?:[.,]\d{1,2})?)\s*(?:horas|hora)\b", text)
+    clean = normalize_work_text(text)
+    match = re.search(r"(\d+(?:[.,]\d{1,2})?)\s*(?:horas|hora)\b", clean)
     if match:
         return parse_amount(match.group(1))
-    match = re.search(r"\b(\d{1,2})h(?:(\d{1,2}))?\b", text)
+    match = re.search(r"\b(\d{1,2})h(?:(\d{1,2}))?\b", clean)
     if match:
         hours = int(match.group(1))
         minutes = int(match.group(2) or 0)
@@ -187,3 +189,30 @@ def minutes_between(start_time: str, end_time: str) -> int:
     if end <= start:
         end += timedelta(days=1)
     return int((end - start).total_seconds() // 60)
+
+
+def normalize_work_text(text: str) -> str:
+    normalized = unicodedata.normalize("NFKD", text or "")
+    normalized = "".join(ch for ch in normalized if not unicodedata.combining(ch))
+    normalized = normalized.lower()
+    normalized = normalized.replace("às", "as").replace("à", "a")
+    normalized = normalized.replace("at?", "ate").replace("?s", "as")
+    return re.sub(r"\s+", " ", normalized).strip()
+
+
+def is_work_correction_message(message: str) -> bool:
+    text = normalize_work_text(message)
+    return any(
+        marker in text
+        for marker in [
+            "falei errado",
+            "errei",
+            "corrigir",
+            "corrige",
+            "correcao",
+            "na verdade",
+            "era ate",
+            "foi ate",
+            "trabalhei ate",
+        ]
+    )

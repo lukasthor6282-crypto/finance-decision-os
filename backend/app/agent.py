@@ -7,8 +7,16 @@ from sqlite3 import Connection
 from .accounting import ParsedTransaction, parse_transaction_message
 from .analytics import money, scenario, summarize
 from .question_router import answer_question
-from .repository import existing_work_session, get_float_fact, insert_transaction, insert_work_session, set_fact
-from .worktime import ParsedWorkSession, parse_hourly_rate, parse_work_session_message
+from .repository import (
+    existing_work_session,
+    find_work_session_for_correction,
+    get_float_fact,
+    insert_transaction,
+    insert_work_session,
+    set_fact,
+    update_work_session,
+)
+from .worktime import ParsedWorkSession, is_work_correction_message, parse_hourly_rate, parse_work_session_message
 
 
 SYSTEM_PROMPT = """
@@ -25,6 +33,8 @@ def answer(conn: Connection, message: str) -> dict:
     known_hourly_rate = hourly_rate or get_float_fact(conn, "hourly_rate")
     work_session = parse_work_session_message(message, known_hourly_rate)
     if work_session:
+        if is_work_correction_message(message):
+            return correct_work_session_from_chat(conn, work_session)
         return record_work_session_from_chat(conn, work_session)
 
     if hourly_rate is not None and any(word in message.lower() for word in ["hora", "/h", "por hora"]):
@@ -198,6 +208,54 @@ def record_work_session_from_chat(conn: Connection, session: ParsedWorkSession) 
             "id": work_result.id,
             "transactionId": tx_result.id,
             "duplicated": False,
+            "balance": kpis["balance"],
+        },
+    )
+
+
+def correct_work_session_from_chat(conn: Connection, session: ParsedWorkSession) -> dict:
+    previous = find_work_session_for_correction(conn, session)
+    if not previous:
+        return response(
+            intent="correct_work_session",
+            answer="Nao encontrei uma jornada anterior desse dia para corrigir. Registre como nova jornada ou informe data e horario inicial.",
+            actions=[
+                "Ex.: falei errado, na quarta trabalhei das 13:30 as 17:30.",
+                "Ex.: corrigir 02/07/2026 das 13:30 as 17:30.",
+            ],
+            confidence=0.72,
+            data={**session.__dict__, "corrected": False},
+        )
+
+    old_hours = float(previous["hours"])
+    old_amount = float(previous["gross_amount"])
+    result = update_work_session(conn, previous["id"], session)
+    summary = summarize(conn)
+    kpis = summary["kpis"]
+    time_line = f" ({session.start_time}-{session.end_time})" if session.start_time and session.end_time else ""
+    delta = session.gross_amount - old_amount
+
+    return response(
+        intent="correct_work_session",
+        answer=(
+            f"Jornada corrigida{time_line}: antes {old_hours:.2f}h/{money(old_amount)}, "
+            f"agora {session.hours:.2f}h x {money(session.hourly_rate)}/h = {money(session.gross_amount)}. "
+            f"Ajuste no saldo: {money(delta)}. Saldo agora: {money(kpis['balance'])}."
+        ),
+        actions=[
+            "Corrigi a jornada e a receita ligada a ela.",
+            "Nao criei lancamento duplicado.",
+            "Revise no livro caixa se o horario ficou correto.",
+        ],
+        confidence=0.95,
+        data={
+            **session.__dict__,
+            "id": result.id,
+            "transactionId": result.transaction_id,
+            "corrected": True,
+            "previousHours": old_hours,
+            "previousAmount": old_amount,
+            "delta": round(delta, 2),
             "balance": kpis["balance"],
         },
     )

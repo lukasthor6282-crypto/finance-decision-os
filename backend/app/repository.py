@@ -384,6 +384,108 @@ def existing_work_session(conn: Connection, session: ParsedWorkSession) -> dict 
     return dict(row) if row else None
 
 
+def find_work_session_for_correction(conn: Connection, session: ParsedWorkSession) -> dict | None:
+    if session.start_time:
+        row = conn.execute(
+            """
+            SELECT id, transaction_id, date, start_time, end_time, hours, gross_amount
+            FROM work_sessions
+            WHERE date = ? AND start_time = ?
+            ORDER BY id DESC
+            LIMIT 1
+            """,
+            (session.date, session.start_time),
+        ).fetchone()
+        if row:
+            return dict(row)
+
+    row = conn.execute(
+        """
+        SELECT id, transaction_id, date, start_time, end_time, hours, gross_amount
+        FROM work_sessions
+        WHERE date = ?
+        ORDER BY id DESC
+        LIMIT 1
+        """,
+        (session.date,),
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def update_work_session(conn: Connection, session_id: int, session: ParsedWorkSession) -> WorkSessionResult:
+    row = conn.execute(
+        "SELECT id, transaction_id FROM work_sessions WHERE id = ?",
+        (session_id,),
+    ).fetchone()
+    if not row:
+        return WorkSessionResult(None, None, False)
+
+    conn.execute(
+        """
+        UPDATE work_sessions
+        SET date = ?,
+            start_time = ?,
+            end_time = ?,
+            break_minutes = ?,
+            hourly_rate = ?,
+            hours = ?,
+            gross_amount = ?,
+            description = ?,
+            notes = ?
+        WHERE id = ?
+        """,
+        (
+            session.date,
+            session.start_time,
+            session.end_time,
+            session.break_minutes,
+            session.hourly_rate,
+            session.hours,
+            session.gross_amount,
+            session.description,
+            session.notes,
+            session_id,
+        ),
+    )
+
+    transaction_id = row["transaction_id"]
+    if transaction_id:
+        description = session.description
+        account = "Principal"
+        fingerprint = transaction_fingerprint(session.date, description, session.gross_amount, account, "income")
+        fingerprint = f"{fingerprint}:work_session:{session_id}"
+        conn.execute(
+            """
+            UPDATE transactions
+            SET date = ?,
+                description = ?,
+                amount = ?,
+                category = 'Receita',
+                account = ?,
+                notes = ?,
+                merchant = ?,
+                normalized_description = ?,
+                fingerprint = ?,
+                transaction_type = 'income',
+                is_internal = 0
+            WHERE id = ?
+            """,
+            (
+                session.date,
+                description,
+                session.gross_amount,
+                account,
+                session.notes,
+                merchant_from_description(description),
+                normalize_text(description),
+                fingerprint,
+                transaction_id,
+            ),
+        )
+
+    return WorkSessionResult(session_id, transaction_id, False)
+
+
 def insert_work_session(conn: Connection, session: ParsedWorkSession, transaction_id: int | None) -> WorkSessionResult:
     existing = existing_work_session(conn, session)
     if existing:

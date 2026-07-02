@@ -302,6 +302,40 @@ def test_agent_reuses_saved_hourly_rate_for_next_work_session(tmp_path, monkeypa
     assert client.get("/api/dashboard").json()["kpis"]["balance"] == 50
 
 
+def test_agent_corrects_previous_work_session_without_duplicate(tmp_path, monkeypatch):
+    client = make_empty_client(tmp_path, monkeypatch)
+
+    first = client.post(
+        "/api/agent/chat",
+        json={"message": "02/07/2026 trabalhei das 13:30 até as 15:30 ganhando 12 por hora"},
+    )
+    correction = client.post(
+        "/api/agent/chat",
+        json={"message": "falei errado, 02/07/2026 trabalhei das 13:30 às 17:30"},
+    )
+
+    assert first.status_code == 200
+    assert first.json()["intent"] == "record_work_session"
+    assert correction.status_code == 200
+    body = correction.json()
+    assert body["intent"] == "correct_work_session"
+    assert body["data"]["corrected"] is True
+    assert body["data"]["hours"] == 4
+    assert body["data"]["gross_amount"] == 48
+    assert body["data"]["delta"] == 24
+
+    sessions = client.get("/api/work-sessions").json()
+    transactions = client.get("/api/transactions").json()
+    dashboard = client.get("/api/dashboard", params={"month": "2026-07"}).json()
+
+    assert len(sessions) == 1
+    assert sessions[0]["end_time"] == "17:30"
+    assert len(transactions) == 1
+    assert transactions[0]["amount"] == 48
+    assert dashboard["kpis"]["income"] == 48
+    assert dashboard["kpis"]["balance"] == 48
+
+
 def test_goals_crud(tmp_path, monkeypatch):
     client = make_client(tmp_path, monkeypatch)
 
