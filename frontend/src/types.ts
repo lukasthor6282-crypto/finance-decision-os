@@ -35,6 +35,21 @@ export type Transaction = {
   category_locked?: number | boolean
 }
 
+export type WorkSession = {
+  id: number
+  date: string
+  start_time: string | null
+  end_time: string | null
+  break_minutes: number
+  hourly_rate: number
+  hours: number
+  gross_amount: number
+  description: string
+  notes?: string | null
+  transaction_id?: number | null
+  created_at?: string
+}
+
 export type MonthlyPoint = {
   month: string
   income: number

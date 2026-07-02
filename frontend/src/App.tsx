@@ -1,5 +1,5 @@
 import type { FormEvent } from 'react'
-import type { CategoryRule, FinanceSummary, Transaction } from './types'
+import type { CategoryRule, FinanceSummary, Transaction, WorkSession } from './types'
 import {
   Bell,
   Bot,
@@ -33,6 +33,7 @@ import {
   getCategoryRules,
   getSummary,
   getTransactions,
+  getWorkSessions,
   importCsv,
   reprocessTransactions,
   updateTransactionCategory,
@@ -48,6 +49,7 @@ const navItems = [
   { label: 'Hoje', icon: <Home size={19} /> },
   { label: 'Fluxo', icon: <TrendingUp size={19} /> },
   { label: 'Categorias', icon: <PieChart size={19} /> },
+  { label: 'Horas', icon: <Clock3 size={19} /> },
   { label: 'Regras', icon: <Tags size={19} /> },
   { label: 'Dados', icon: <Database size={19} /> },
 ]
@@ -61,6 +63,15 @@ const fallbackMessages: ChatMessage[] = [
 
 const money = (value = 0) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
+
+const todayIso = () => {
+  const date = new Date()
+  date.setMinutes(date.getMinutes() - date.getTimezoneOffset())
+  return date.toISOString().slice(0, 10)
+}
+
+const formatDate = (value: string) =>
+  new Intl.DateTimeFormat('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' }).format(new Date(`${value}T12:00:00`))
 
 const BASE_CATEGORIES = [
   'Alimentacao',
@@ -98,14 +109,22 @@ function App() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [transactions, setTransactions] = useState<Transaction[]>([])
+  const [workSessions, setWorkSessions] = useState<WorkSession[]>([])
   const [categoryRules, setCategoryRules] = useState<CategoryRule[]>([])
   const [rulesLoading, setRulesLoading] = useState(false)
+  const [workLoading, setWorkLoading] = useState(false)
   const [notice, setNotice] = useState('')
   const [ruleForm, setRuleForm] = useState({
     pattern: '',
     category: 'Alimentacao',
     transaction_type: 'expense',
     is_internal: false,
+  })
+  const [workForm, setWorkForm] = useState({
+    date: todayIso(),
+    start: '',
+    end: '',
+    hourlyRate: '',
   })
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -152,8 +171,22 @@ function App() {
     }
   }
 
+  const loadWorkData = async () => {
+    setWorkLoading(true)
+    setError('')
+    try {
+      const sessions = await getWorkSessions(300)
+      setWorkSessions(sessions)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Falha ao carregar banco de horas')
+    } finally {
+      setWorkLoading(false)
+    }
+  }
+
   useEffect(() => {
     if (activeNav === 'Regras') void loadRulesData()
+    if (activeNav === 'Horas') void loadWorkData()
   }, [activeNav])
 
   const decisions = useMemo(() => {
@@ -212,6 +245,36 @@ function App() {
     return Array.from(values).sort((a, b) => a.localeCompare(b))
   }, [categoryRules, summary, transactions])
 
+  const workDays = useMemo(() => {
+    const grouped = new Map<string, { date: string; hours: number; gross: number; count: number; sessions: WorkSession[] }>()
+    workSessions.forEach((session) => {
+      const row = grouped.get(session.date) ?? { date: session.date, hours: 0, gross: 0, count: 0, sessions: [] }
+      row.hours += Number(session.hours) || 0
+      row.gross += Number(session.gross_amount) || 0
+      row.count += 1
+      row.sessions.push(session)
+      grouped.set(session.date, row)
+    })
+    return Array.from(grouped.values())
+      .map((row) => ({
+        ...row,
+        hours: Number(row.hours.toFixed(4)),
+        gross: Number(row.gross.toFixed(2)),
+      }))
+      .sort((a, b) => b.date.localeCompare(a.date))
+  }, [workSessions])
+
+  const workTotals = useMemo(() => {
+    const hours = workSessions.reduce((sum, session) => sum + (Number(session.hours) || 0), 0)
+    const gross = workSessions.reduce((sum, session) => sum + (Number(session.gross_amount) || 0), 0)
+    return {
+      hours: Number(hours.toFixed(2)),
+      gross: Number(gross.toFixed(2)),
+      days: workDays.length,
+      averageRate: hours ? Number((gross / hours).toFixed(2)) : 0,
+    }
+  }, [workDays.length, workSessions])
+
   const todayLabel = new Intl.DateTimeFormat('pt-BR', {
     weekday: 'long',
     day: '2-digit',
@@ -229,6 +292,7 @@ function App() {
       const reply = await askAgent(text)
       setMessages((current) => [...current, { author: 'Finance OS', text: reply.answer }])
       void loadDashboard()
+      if (reply.intent?.includes('work_session') || activeNav === 'Horas') void loadWorkData()
     } catch (err) {
       setMessages((current) => [
         ...current,
@@ -335,6 +399,32 @@ function App() {
       await Promise.all([loadDashboard(), loadRulesData()])
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Falha ao reprocessar')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleWorkSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!workForm.date || !workForm.start || !workForm.end || !workForm.hourlyRate || busy) return
+    const rate = Number(workForm.hourlyRate.replace(',', '.'))
+    if (!Number.isFinite(rate) || rate <= 0) {
+      setError('Valor/hora invalido')
+      return
+    }
+    const text = `${workForm.date} trabalhei das ${workForm.start} ate ${workForm.end} ganhando R$ ${rate.toFixed(2)} por hora`
+    setBusy(true)
+    setNotice('')
+    setError('')
+    setMessages((current) => [...current, { author: 'Voce', text }])
+    try {
+      const reply = await askAgent(text)
+      setMessages((current) => [...current, { author: 'Finance OS', text: reply.answer }])
+      setNotice('Jornada salva no banco de horas.')
+      setWorkForm((current) => ({ ...current, start: '', end: '' }))
+      await Promise.all([loadDashboard(), loadWorkData()])
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Falha ao salvar jornada')
     } finally {
       setBusy(false)
     }
@@ -536,6 +626,153 @@ function App() {
                     )}
                   </article>
                 ))}
+              </div>
+            </section>
+          </main>
+        ) : activeNav === 'Horas' ? (
+          <main className="work-grid">
+            <section className="work-hero glass-panel">
+              <div>
+                <span>Banco de horas</span>
+                <h1>Horas e ganhos por dia</h1>
+                <p>Registro real das jornadas que voce salvou pelo chat ou pelo formulario. Cada linha mostra o que ficou no banco.</p>
+              </div>
+              <button type="button" onClick={() => void loadWorkData()} disabled={workLoading || busy}>
+                <RefreshCw size={16} /> Atualizar
+              </button>
+              {(notice || error) && <p className={error ? 'rules-feedback danger' : 'rules-feedback'}>{error || notice}</p>}
+            </section>
+
+            <section className="work-kpis">
+              <article className="metric-card glass-panel">
+                <span><Clock3 /></span>
+                <div>
+                  <p>Total de horas</p>
+                  <strong>{workTotals.hours.toFixed(2)}h</strong>
+                  <small>{workTotals.days} dias registrados</small>
+                </div>
+              </article>
+              <article className="metric-card glass-panel">
+                <span><CircleDollarSign /></span>
+                <div>
+                  <p>Total ganho</p>
+                  <strong>{money(workTotals.gross)}</strong>
+                  <small>receita criada pelas jornadas</small>
+                </div>
+              </article>
+              <article className="metric-card glass-panel">
+                <span><TrendingUp /></span>
+                <div>
+                  <p>Media por hora</p>
+                  <strong>{money(workTotals.averageRate)}</strong>
+                  <small>baseado nos registros salvos</small>
+                </div>
+              </article>
+            </section>
+
+            <form className="work-form glass-panel" onSubmit={handleWorkSubmit}>
+              <div className="panel-title">
+                <h2>Registrar jornada</h2>
+                <span>usa IA</span>
+              </div>
+              <label>
+                Data
+                <input
+                  type="date"
+                  value={workForm.date}
+                  onChange={(event) => setWorkForm((current) => ({ ...current, date: event.target.value }))}
+                />
+              </label>
+              <div className="work-form-row">
+                <label>
+                  Entrada
+                  <input
+                    type="time"
+                    value={workForm.start}
+                    onChange={(event) => setWorkForm((current) => ({ ...current, start: event.target.value }))}
+                  />
+                </label>
+                <label>
+                  Saida
+                  <input
+                    type="time"
+                    value={workForm.end}
+                    onChange={(event) => setWorkForm((current) => ({ ...current, end: event.target.value }))}
+                  />
+                </label>
+              </div>
+              <label>
+                Valor/hora
+                <input
+                  inputMode="decimal"
+                  value={workForm.hourlyRate}
+                  placeholder="Ex.: 12"
+                  onChange={(event) => setWorkForm((current) => ({ ...current, hourlyRate: event.target.value }))}
+                />
+              </label>
+              <button type="submit" disabled={busy || !workForm.date || !workForm.start || !workForm.end || !workForm.hourlyRate}>
+                <Save size={16} /> Salvar jornada
+              </button>
+            </form>
+
+            <section className="work-days glass-panel">
+              <div className="panel-title">
+                <h2>Por dia</h2>
+                <span>{workDays.length} dias</span>
+              </div>
+              <div className="work-day-list">
+                {workDays.map((day) => (
+                  <article key={day.date}>
+                    <div>
+                      <span>{formatDate(day.date)}</span>
+                      <strong>{day.hours.toFixed(2)}h</strong>
+                    </div>
+                    <div>
+                      <span>{day.count} jornada{day.count > 1 ? 's' : ''}</span>
+                      <strong>{money(day.gross)}</strong>
+                    </div>
+                  </article>
+                ))}
+                {!workDays.length && (
+                  <article className="empty-work">
+                    <div>
+                      <span>Nenhuma jornada salva</span>
+                      <strong>Registre pelo chat ou formulario</strong>
+                    </div>
+                  </article>
+                )}
+              </div>
+            </section>
+
+            <section className="work-sessions glass-panel">
+              <div className="panel-title">
+                <h2>Jornadas salvas</h2>
+                <span>{workSessions.length} registros</span>
+              </div>
+              <div className="work-table">
+                <div className="work-table-head">
+                  <span>Data</span>
+                  <span>Horario</span>
+                  <span>Horas</span>
+                  <span>Valor/h</span>
+                  <span>Total</span>
+                </div>
+                {workSessions.map((session) => (
+                  <article key={session.id}>
+                    <span>{formatDate(session.date)}</span>
+                    <strong>{session.start_time && session.end_time ? `${session.start_time}-${session.end_time}` : 'sem horario'}</strong>
+                    <b>{Number(session.hours).toFixed(2)}h</b>
+                    <b>{money(session.hourly_rate)}</b>
+                    <b>{money(session.gross_amount)}</b>
+                    <small>{session.description}</small>
+                  </article>
+                ))}
+                {!workSessions.length && (
+                  <article className="empty-row">
+                    <strong>Sem banco de horas ainda</strong>
+                    <small>Ex.: trabalhei das 13:30 ate 17:30 ganhando R$12 por hora.</small>
+                  </article>
+                )}
               </div>
             </section>
           </main>

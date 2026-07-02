@@ -302,6 +302,25 @@ def test_agent_reuses_saved_hourly_rate_for_next_work_session(tmp_path, monkeypa
     assert client.get("/api/dashboard").json()["kpis"]["balance"] == 50
 
 
+def test_agent_records_work_session_with_iso_date_from_form(tmp_path, monkeypatch):
+    client = make_empty_client(tmp_path, monkeypatch)
+
+    response = client.post(
+        "/api/agent/chat",
+        json={"message": "2026-07-02 trabalhei das 10:00 ate 12:30 ganhando R$ 20 por hora"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["intent"] == "record_work_session"
+    assert body["data"]["date"] == "2026-07-02"
+    assert body["data"]["hours"] == 2.5
+    assert body["data"]["gross_amount"] == 50
+
+    sessions = client.get("/api/work-sessions").json()
+    assert sessions[0]["date"] == "2026-07-02"
+
+
 def test_agent_corrects_previous_work_session_without_duplicate(tmp_path, monkeypatch):
     client = make_empty_client(tmp_path, monkeypatch)
 

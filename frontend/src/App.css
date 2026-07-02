@@ -133,6 +133,8 @@ svg {
 .ask-box button,
 .rules-actions button,
 .rule-form button,
+.work-hero button,
+.work-form button,
 .rule-library button {
   position: relative;
   z-index: 1;
@@ -186,6 +188,8 @@ svg {
 .ask-box button:hover,
 .rules-actions button:hover,
 .rule-form button:hover,
+.work-hero button:hover,
+.work-form button:hover,
 .rule-library button:hover {
   background: oklch(1 0 0 / 0.06);
 }
@@ -194,7 +198,9 @@ svg {
 .side-rail button:active,
 .top-tools button:active,
 .panel-title button:active,
-.ask-box button:active {
+.ask-box button:active,
+.work-hero button:active,
+.work-form button:active {
   transform: scale(0.97);
   transition-duration: 120ms;
 }
@@ -509,7 +515,9 @@ svg {
 }
 
 .rules-actions button,
-.rule-form button {
+.rule-form button,
+.work-hero button,
+.work-form button {
   min-width: 0;
   padding: 0 13px;
   color: var(--text);
@@ -590,7 +598,8 @@ svg {
 }
 
 .rules-table label,
-.rule-form label {
+.rule-form label,
+.work-form label {
   display: grid;
   gap: 7px;
   color: var(--text);
@@ -603,7 +612,8 @@ svg {
 
 .rules-table select,
 .rule-form select,
-.rule-form input:not([type='checkbox']) {
+.rule-form input:not([type='checkbox']),
+.work-form input {
   width: 100%;
   min-height: 44px;
   color: var(--heading);
@@ -621,7 +631,8 @@ svg {
 
 .rules-table select:focus,
 .rule-form select:focus,
-.rule-form input:focus {
+.rule-form input:focus,
+.work-form input:focus {
   border-color: oklch(0.32 0 0 / 0.38);
 }
 
@@ -654,7 +665,8 @@ svg {
   accent-color: var(--accent);
 }
 
-.rule-form button {
+.rule-form button,
+.work-form button {
   width: 100%;
   margin-top: 2px;
 }
@@ -713,6 +725,183 @@ svg {
 .rule-library button {
   border-radius: 13px;
   color: var(--danger);
+}
+
+.work-grid {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(300px, 0.64fr) minmax(0, 1fr);
+  grid-template-areas:
+    "hero hero"
+    "kpis kpis"
+    "form days"
+    "sessions sessions";
+  gap: 14px;
+}
+
+.work-hero,
+.work-form,
+.work-days,
+.work-sessions {
+  border-radius: 16px;
+  padding: 18px;
+}
+
+.work-hero {
+  grid-area: hero;
+  min-height: 148px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 18px;
+}
+
+.work-hero span,
+.work-day-list span,
+.work-table span,
+.work-table small {
+  color: var(--muted);
+}
+
+.work-hero span {
+  font: 720 12px/1 var(--ui);
+}
+
+.work-hero h1 {
+  margin-top: 10px;
+  color: var(--heading);
+  font: 780 34px/1.05 var(--display);
+}
+
+.work-hero p {
+  max-width: 680px;
+  margin-top: 10px;
+  color: var(--muted);
+  font: 540 14px/1.55 var(--ui);
+}
+
+.work-kpis {
+  grid-area: kpis;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.work-form {
+  grid-area: form;
+  display: grid;
+  align-content: start;
+  gap: 14px;
+}
+
+.work-form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.work-days {
+  grid-area: days;
+  min-width: 0;
+}
+
+.work-day-list {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.work-day-list article {
+  min-height: 76px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 13px;
+  border: 1px solid oklch(1 0 0 / 0.44);
+  border-radius: 14px;
+  background:
+    linear-gradient(145deg, oklch(1 0 0 / 0.074), oklch(1 0 0 / 0.014)),
+    oklch(1 0 0 / 0.02);
+  box-shadow: inset 0 1px 0 oklch(1 0 0 / 0.48);
+  backdrop-filter: blur(34px) saturate(165%);
+  -webkit-backdrop-filter: blur(34px) saturate(165%);
+  animation: item-rise 220ms var(--ease-out) backwards;
+}
+
+.work-day-list strong {
+  display: block;
+  margin-top: 8px;
+  color: var(--heading);
+  font: 780 18px/1 var(--numbers);
+}
+
+.work-day-list article > div:last-child {
+  text-align: right;
+}
+
+.work-day-list .empty-work {
+  grid-template-columns: 1fr;
+}
+
+.work-sessions {
+  grid-area: sessions;
+  min-width: 0;
+}
+
+.work-table {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.work-table-head,
+.work-table article {
+  display: grid;
+  grid-template-columns: 120px minmax(130px, 1fr) 90px 110px 110px;
+  align-items: center;
+  gap: 12px;
+}
+
+.work-table-head {
+  padding: 0 12px 2px;
+  color: var(--muted);
+  font: 760 11px/1 var(--ui);
+}
+
+.work-table article {
+  min-height: 68px;
+  padding: 12px;
+  border: 1px solid oklch(1 0 0 / 0.44);
+  border-radius: 14px;
+  background: oklch(1 0 0 / 0.026);
+  backdrop-filter: blur(30px) saturate(160%);
+  -webkit-backdrop-filter: blur(30px) saturate(160%);
+  animation: item-rise 220ms var(--ease-out) backwards;
+}
+
+.work-table strong,
+.work-table b {
+  min-width: 0;
+  color: var(--heading);
+  font: 760 13px/1.2 var(--ui);
+}
+
+.work-table b {
+  font-family: var(--numbers);
+}
+
+.work-table small {
+  grid-column: 2 / -1;
+  font: 680 11px/1.25 var(--ui);
+}
+
+.work-table .empty-row {
+  grid-template-columns: 1fr;
 }
 
 .right-column {
@@ -1205,6 +1394,16 @@ input:focus-visible {
       "library";
   }
 
+  .work-grid {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "hero"
+      "kpis"
+      "form"
+      "days"
+      "sessions";
+  }
+
   .right-column {
     grid-template-columns: 1fr 1fr;
     grid-template-rows: auto;
@@ -1273,6 +1472,19 @@ input:focus-visible {
     width: 100%;
   }
 
+  .work-hero {
+    grid-template-columns: 1fr;
+  }
+
+  .work-hero button {
+    width: 100%;
+  }
+
+  .work-kpis,
+  .work-form-row {
+    grid-template-columns: 1fr;
+  }
+
   .rules-actions button {
     flex: 1;
   }
@@ -1292,6 +1504,27 @@ input:focus-visible {
 
   .rules-table small {
     grid-column: 1;
+  }
+
+  .work-table-head {
+    display: none;
+  }
+
+  .work-table article {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .work-table small {
+    grid-column: 1;
+  }
+
+  .work-day-list article {
+    grid-template-columns: 1fr;
+  }
+
+  .work-day-list article > div:last-child {
+    text-align: left;
   }
 
   .risk-row {

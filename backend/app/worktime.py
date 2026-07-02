@@ -110,6 +110,16 @@ def infer_work_date(text: str) -> str:
     if "anteontem" in clean:
         return (today - timedelta(days=2)).isoformat()
 
+    iso_match = re.search(r"\b(\d{4})-(\d{1,2})-(\d{1,2})\b", clean)
+    if iso_match:
+        year = int(iso_match.group(1))
+        month = int(iso_match.group(2))
+        day = int(iso_match.group(3))
+        try:
+            return date(year, month, day).isoformat()
+        except ValueError:
+            return today.isoformat()
+
     match = re.search(r"\b(\d{1,2})[/-](\d{1,2})(?:[/-](\d{2,4}))?\b", clean)
     if match:
         day = int(match.group(1))
