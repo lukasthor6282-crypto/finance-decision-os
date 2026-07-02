@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: finance-decision-os
+    runtime: docker
+    plan: starter
+    healthCheckPath: /api/health
+    disk:
+      name: finance-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: FINANCE_DB_PATH
+        value: /data/finance.db
+      - key: STATIC_DIR
+        value: /app/static
+      - key: APP_USER
+        value: lukas
