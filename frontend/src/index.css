@@ -1,13 +1,18 @@
 :root {
   --bg: oklch(0.97 0 0);
-  --surface: oklch(1 0 0 / 0.075);
+  --surface: oklch(1 0 0 / 0.052);
   --heading: oklch(0.18 0 0);
   --text: oklch(0.32 0 0);
   --muted: oklch(0.48 0 0);
-  --accent: oklch(0.27 0 0);
-  --glass-bg: oklch(1 0 0 / 0.032);
-  --glass-border: oklch(1 0 0 / 0.5);
-  --glass-edge: oklch(1 0 0 / 0.72);
+  --accent: oklch(0.57 0.12 158);
+  --accent-ink: oklch(0.26 0.08 158);
+  --accent-mint: oklch(0.68 0.14 158);
+  --accent-amber: oklch(0.72 0.14 82);
+  --accent-coral: oklch(0.63 0.15 28);
+  --accent-violet: oklch(0.58 0.11 292);
+  --glass-bg: oklch(1 0 0 / 0.018);
+  --glass-border: oklch(1 0 0 / 0.38);
+  --glass-edge: oklch(1 0 0 / 0.62);
   --glass-hairline: oklch(0 0 0 / 0.055);
   --danger: oklch(0.56 0.18 32);
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
@@ -46,9 +51,9 @@ body {
   overflow-y: auto;
   color: var(--text);
   background:
-    linear-gradient(146deg, transparent 0 14%, oklch(1 0 0 / 0.46) 27%, transparent 43%),
-    linear-gradient(38deg, oklch(0.32 0 0 / 0.12), transparent 36%, oklch(1 0 0 / 0.34) 68%),
-    linear-gradient(118deg, oklch(1 0 0), oklch(0.9 0 0) 48%, oklch(0.78 0 0));
+    linear-gradient(146deg, transparent 0 14%, oklch(1 0 0 / 0.5) 27%, transparent 43%),
+    linear-gradient(38deg, oklch(0.7 0.08 158 / 0.12), transparent 34%, oklch(0.78 0.1 82 / 0.12) 68%),
+    linear-gradient(118deg, oklch(1 0 0), oklch(0.92 0.018 150) 48%, oklch(0.82 0.018 280));
   font-family: var(--ui);
   letter-spacing: 0;
 }

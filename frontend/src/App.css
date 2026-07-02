@@ -44,16 +44,18 @@ svg {
 
 .os-shell::before {
   background:
-    linear-gradient(146deg, transparent 0 14%, oklch(1 0 0 / 0.44) 27%, transparent 43%),
-    linear-gradient(38deg, oklch(0.32 0 0 / 0.13), transparent 36%, oklch(1 0 0 / 0.32) 68%),
-    linear-gradient(118deg, oklch(1 0 0), oklch(0.9 0 0) 54%, oklch(0.78 0 0));
+    linear-gradient(146deg, transparent 0 14%, oklch(1 0 0 / 0.5) 27%, transparent 43%),
+    linear-gradient(38deg, oklch(0.68 0.14 158 / 0.13), transparent 36%, oklch(0.72 0.14 82 / 0.12) 68%),
+    linear-gradient(118deg, oklch(1 0 0), oklch(0.93 0.012 158) 54%, oklch(0.82 0.014 292));
 }
 
 .os-shell::after {
   z-index: -1;
   background:
-    linear-gradient(145deg, transparent 0 16%, oklch(1 0 0 / 0.22) 28%, transparent 44%),
-    linear-gradient(24deg, transparent 0 45%, oklch(0.72 0 0 / 0.16) 57%, oklch(1 0 0 / 0.22) 70%, transparent 86%);
+    radial-gradient(circle at 14% 18%, oklch(0.68 0.14 158 / 0.16), transparent 22%),
+    radial-gradient(circle at 86% 28%, oklch(0.72 0.14 82 / 0.12), transparent 20%),
+    radial-gradient(circle at 62% 86%, oklch(0.63 0.15 28 / 0.1), transparent 24%),
+    linear-gradient(145deg, transparent 0 16%, oklch(1 0 0 / 0.18) 28%, transparent 44%);
 }
 
 .glass-sheet,
@@ -63,16 +65,16 @@ svg {
   overflow: hidden;
   border: 1px solid var(--glass-border);
   background:
-    linear-gradient(145deg, oklch(1 0 0 / 0.13) 0%, oklch(1 0 0 / 0.026) 42%, oklch(0.78 0 0 / 0.028) 100%),
-    linear-gradient(235deg, oklch(1 0 0 / 0.052), transparent 46%),
+    linear-gradient(145deg, oklch(1 0 0 / 0.078) 0%, oklch(1 0 0 / 0.012) 42%, oklch(0.78 0 0 / 0.014) 100%),
+    linear-gradient(235deg, oklch(1 0 0 / 0.034), transparent 46%),
     var(--glass-bg);
   box-shadow:
-    0 4px 8px oklch(0.34 0 0 / 0.035),
+    0 4px 8px oklch(0.34 0 0 / 0.022),
     inset 0 1px 0 var(--glass-edge),
-    inset 0 -1px 0 oklch(1 0 0 / 0.16),
-    inset 0 0 8px oklch(1 0 0 / 0.055);
-  backdrop-filter: blur(44px) saturate(180%) contrast(1.05);
-  -webkit-backdrop-filter: blur(44px) saturate(180%) contrast(1.05);
+    inset 0 -1px 0 oklch(1 0 0 / 0.1),
+    inset 0 0 8px oklch(1 0 0 / 0.038);
+  backdrop-filter: blur(52px) saturate(190%) contrast(1.06);
+  -webkit-backdrop-filter: blur(52px) saturate(190%) contrast(1.06);
   transition:
     transform 220ms var(--ease-out),
     border-color 220ms var(--ease-soft),
@@ -88,9 +90,10 @@ svg {
   border-radius: inherit;
   pointer-events: none;
   background:
-    radial-gradient(circle at 18% 0%, oklch(1 0 0 / 0.24), transparent 32%),
-    linear-gradient(128deg, oklch(1 0 0 / 0.2), oklch(1 0 0 / 0.014) 31%, transparent 52%),
-    linear-gradient(300deg, transparent 24%, oklch(0.82 0 0 / 0.052) 52%, oklch(1 0 0 / 0.1) 78%, transparent);
+    radial-gradient(circle at 18% 0%, oklch(1 0 0 / 0.22), transparent 32%),
+    radial-gradient(circle at 86% 18%, oklch(0.68 0.14 158 / 0.055), transparent 26%),
+    linear-gradient(128deg, oklch(1 0 0 / 0.16), oklch(1 0 0 / 0.01) 31%, transparent 52%),
+    linear-gradient(300deg, transparent 24%, oklch(0.82 0 0 / 0.034) 52%, oklch(1 0 0 / 0.08) 78%, transparent);
   mix-blend-mode: screen;
   opacity: 0.9;
   transform: translate3d(-8px, -4px, 0);
@@ -180,7 +183,13 @@ svg {
 
 .side-rail button.active {
   color: var(--accent);
-  background: oklch(1 0 0 / 0.055);
+  border-color: oklch(0.68 0.14 158 / 0.42);
+  background:
+    linear-gradient(145deg, oklch(0.68 0.14 158 / 0.14), oklch(1 0 0 / 0.018)),
+    oklch(1 0 0 / 0.018);
+  box-shadow:
+    inset 0 1px 0 oklch(1 0 0 / 0.74),
+    inset 0 -1px 0 oklch(0.68 0.14 158 / 0.1);
 }
 
 .side-rail button:hover,
@@ -298,6 +307,28 @@ svg {
   gap: 16px;
 }
 
+.assistant-pane,
+.balance-card,
+.decision-card,
+.risk-panel,
+.notes-panel,
+.rules-hero,
+.rules-transactions,
+.rule-form,
+.rule-library,
+.work-hero,
+.work-form,
+.work-days,
+.work-sessions,
+.money-hero,
+.commitment-panel,
+.money-transactions,
+.metric-card {
+  background:
+    linear-gradient(145deg, oklch(1 0 0 / 0.058), oklch(1 0 0 / 0.01) 48%, oklch(1 0 0 / 0.006)),
+    var(--glass-bg);
+}
+
 .assistant-head {
   display: flex;
   align-items: center;
@@ -310,9 +341,11 @@ svg {
   display: grid;
   place-items: center;
   color: var(--accent);
-  border: 1px solid oklch(1 0 0 / 0.5);
+  border: 1px solid oklch(0.68 0.14 158 / 0.36);
   border-radius: 16px;
-  background: oklch(1 0 0 / 0.035);
+  background:
+    linear-gradient(145deg, oklch(0.68 0.14 158 / 0.12), oklch(1 0 0 / 0.018)),
+    oklch(1 0 0 / 0.018);
   backdrop-filter: blur(32px);
   -webkit-backdrop-filter: blur(32px);
 }
@@ -340,10 +373,10 @@ svg {
 .risk-row,
 .chat-window,
 .ask-box > div {
-  border: 1px solid oklch(1 0 0 / 0.46);
+  border: 1px solid oklch(1 0 0 / 0.38);
   background:
-    linear-gradient(145deg, oklch(1 0 0 / 0.074), oklch(1 0 0 / 0.014)),
-    oklch(1 0 0 / 0.02);
+    linear-gradient(145deg, oklch(1 0 0 / 0.05), oklch(1 0 0 / 0.01)),
+    oklch(1 0 0 / 0.012);
   box-shadow:
     inset 0 1px 0 oklch(1 0 0 / 0.5),
     inset 0 -1px 0 oklch(1 0 0 / 0.1);
@@ -373,6 +406,27 @@ svg {
   color: var(--accent);
 }
 
+.status-row span:nth-child(1) svg,
+.card-strip .metric-card:nth-child(1) svg,
+.money-kpis .metric-card:nth-child(1) svg,
+.work-kpis .metric-card:nth-child(1) svg {
+  color: var(--accent-mint);
+}
+
+.status-row span:nth-child(2) svg,
+.card-strip .metric-card:nth-child(2) svg,
+.money-kpis .metric-card:nth-child(2) svg,
+.work-kpis .metric-card:nth-child(2) svg {
+  color: var(--accent-coral);
+}
+
+.status-row span:nth-child(3) svg,
+.card-strip .metric-card:nth-child(3) svg,
+.money-kpis .metric-card:nth-child(3) svg,
+.work-kpis .metric-card:nth-child(3) svg {
+  color: var(--accent-amber);
+}
+
 .chat-window {
   min-height: 0;
   overflow: auto;
@@ -387,11 +441,11 @@ svg {
   width: fit-content;
   max-width: 76%;
   padding: 13px 15px;
-  border: 1px solid oklch(1 0 0 / 0.46);
+  border: 1px solid oklch(1 0 0 / 0.36);
   border-radius: 14px;
   background:
-    linear-gradient(145deg, oklch(1 0 0 / 0.082), oklch(1 0 0 / 0.016)),
-    oklch(1 0 0 / 0.022);
+    linear-gradient(145deg, oklch(1 0 0 / 0.052), oklch(1 0 0 / 0.01)),
+    oklch(1 0 0 / 0.012);
   box-shadow: inset 0 1px 0 oklch(1 0 0 / 0.42);
   backdrop-filter: blur(34px) saturate(165%);
   -webkit-backdrop-filter: blur(34px) saturate(165%);
@@ -400,7 +454,10 @@ svg {
 
 .message.user {
   align-self: flex-end;
-  background: oklch(0.27 0 0 / 0.12);
+  border-color: oklch(0.68 0.14 158 / 0.34);
+  background:
+    linear-gradient(145deg, oklch(0.68 0.14 158 / 0.14), oklch(1 0 0 / 0.012)),
+    oklch(1 0 0 / 0.01);
   animation-delay: 60ms;
 }
 
@@ -442,7 +499,7 @@ svg {
 }
 
 .ask-box > div:focus-within {
-  border-color: oklch(1 0 0 / 0.72);
+  border-color: oklch(0.68 0.14 158 / 0.46);
   transform: translateY(-1px);
 }
 
@@ -573,11 +630,11 @@ svg {
 .rules-table article {
   min-height: 70px;
   padding: 12px;
-  border: 1px solid oklch(1 0 0 / 0.44);
+  border: 1px solid oklch(1 0 0 / 0.34);
   border-radius: 14px;
   background:
-    linear-gradient(145deg, oklch(1 0 0 / 0.074), oklch(1 0 0 / 0.014)),
-    oklch(1 0 0 / 0.02);
+    linear-gradient(145deg, oklch(1 0 0 / 0.046), oklch(1 0 0 / 0.009)),
+    oklch(1 0 0 / 0.01);
   box-shadow: inset 0 1px 0 oklch(1 0 0 / 0.48);
   backdrop-filter: blur(34px) saturate(165%);
   -webkit-backdrop-filter: blur(34px) saturate(165%);
@@ -620,12 +677,12 @@ svg {
   width: 100%;
   min-height: 44px;
   color: var(--heading);
-  border: 1px solid oklch(1 0 0 / 0.5);
+  border: 1px solid oklch(1 0 0 / 0.38);
   border-radius: 13px;
   outline: 0;
   background:
-    linear-gradient(145deg, oklch(1 0 0 / 0.09), oklch(1 0 0 / 0.018)),
-    oklch(1 0 0 / 0.04);
+    linear-gradient(145deg, oklch(1 0 0 / 0.055), oklch(1 0 0 / 0.01)),
+    oklch(1 0 0 / 0.018);
   box-shadow:
     inset 0 1px 0 oklch(1 0 0 / 0.5),
     inset 0 -1px 0 oklch(1 0 0 / 0.08);
@@ -636,7 +693,7 @@ svg {
 .rule-form select:focus,
 .rule-form input:focus,
 .work-form input:focus {
-  border-color: oklch(0.32 0 0 / 0.38);
+  border-color: oklch(0.68 0.14 158 / 0.46);
 }
 
 .rules-table small {
@@ -823,11 +880,11 @@ svg {
   align-items: center;
   gap: 12px;
   padding: 13px;
-  border: 1px solid oklch(1 0 0 / 0.44);
+  border: 1px solid oklch(1 0 0 / 0.34);
   border-radius: 14px;
   background:
-    linear-gradient(145deg, oklch(1 0 0 / 0.074), oklch(1 0 0 / 0.014)),
-    oklch(1 0 0 / 0.02);
+    linear-gradient(145deg, oklch(1 0 0 / 0.046), oklch(1 0 0 / 0.009)),
+    oklch(1 0 0 / 0.01);
   box-shadow: inset 0 1px 0 oklch(1 0 0 / 0.48);
   backdrop-filter: blur(34px) saturate(165%);
   -webkit-backdrop-filter: blur(34px) saturate(165%);
@@ -879,9 +936,9 @@ svg {
 .work-table article {
   min-height: 68px;
   padding: 12px;
-  border: 1px solid oklch(1 0 0 / 0.44);
+  border: 1px solid oklch(1 0 0 / 0.34);
   border-radius: 14px;
-  background: oklch(1 0 0 / 0.026);
+  background: oklch(1 0 0 / 0.012);
   backdrop-filter: blur(30px) saturate(160%);
   -webkit-backdrop-filter: blur(30px) saturate(160%);
   animation: item-rise 220ms var(--ease-out) backwards;
@@ -993,11 +1050,11 @@ svg {
   align-items: center;
   gap: 14px;
   padding: 13px;
-  border: 1px solid oklch(1 0 0 / 0.44);
+  border: 1px solid oklch(1 0 0 / 0.34);
   border-radius: 14px;
   background:
-    linear-gradient(145deg, oklch(1 0 0 / 0.074), oklch(1 0 0 / 0.014)),
-    oklch(1 0 0 / 0.02);
+    linear-gradient(145deg, oklch(1 0 0 / 0.046), oklch(1 0 0 / 0.009)),
+    oklch(1 0 0 / 0.01);
   box-shadow: inset 0 1px 0 oklch(1 0 0 / 0.48);
   backdrop-filter: blur(34px) saturate(165%);
   -webkit-backdrop-filter: blur(34px) saturate(165%);
@@ -1065,9 +1122,9 @@ svg {
 .money-table article {
   min-height: 64px;
   padding: 12px;
-  border: 1px solid oklch(1 0 0 / 0.44);
+  border: 1px solid oklch(1 0 0 / 0.34);
   border-radius: 14px;
-  background: oklch(1 0 0 / 0.026);
+  background: oklch(1 0 0 / 0.012);
   backdrop-filter: blur(30px) saturate(160%);
   -webkit-backdrop-filter: blur(30px) saturate(160%);
   animation: item-rise 220ms var(--ease-out) backwards;
@@ -1153,8 +1210,8 @@ svg {
   flex: 1;
   border-radius: 999px;
   background:
-    linear-gradient(180deg, oklch(1 0 0 / 0.34), oklch(0.24 0 0 / 0.12)),
-    oklch(0.34 0 0 / 0.2);
+    linear-gradient(180deg, oklch(1 0 0 / 0.4), oklch(0.68 0.14 158 / 0.22)),
+    oklch(0.68 0.14 158 / 0.12);
   box-shadow: inset 0 1px 0 oklch(1 0 0 / 0.35);
   transform-origin: bottom;
   animation: bar-rise 260ms var(--ease-out) backwards;
@@ -1244,8 +1301,8 @@ svg {
   overflow: hidden;
   border-radius: 999px;
   background:
-    linear-gradient(90deg, oklch(1 0 0 / 0.07), oklch(1 0 0 / 0.018)),
-    oklch(1 0 0 / 0.024);
+    linear-gradient(90deg, oklch(1 0 0 / 0.045), oklch(1 0 0 / 0.01)),
+    oklch(1 0 0 / 0.014);
   box-shadow: inset 0 1px 0 oklch(1 0 0 / 0.32);
 }
 
@@ -1254,8 +1311,8 @@ svg {
   height: 100%;
   border-radius: inherit;
   background:
-    linear-gradient(180deg, oklch(1 0 0 / 0.3), oklch(0.24 0 0 / 0.13)),
-    oklch(0.34 0 0 / 0.26);
+    linear-gradient(90deg, oklch(0.68 0.14 158 / 0.42), oklch(0.72 0.14 82 / 0.36)),
+    oklch(0.68 0.14 158 / 0.16);
   transform-origin: left;
   animation: bar-grow 260ms var(--ease-out) backwards;
 }
@@ -1288,14 +1345,35 @@ svg {
   height: 44px;
   display: grid;
   place-items: center;
-  border: 1px solid oklch(1 0 0 / 0.62);
+  border: 1px solid oklch(1 0 0 / 0.44);
   border-radius: 14px;
   background:
-    linear-gradient(145deg, oklch(1 0 0 / 0.092), oklch(1 0 0 / 0.016)),
-    oklch(1 0 0 / 0.022);
+    linear-gradient(145deg, oklch(1 0 0 / 0.058), oklch(1 0 0 / 0.01)),
+    oklch(1 0 0 / 0.012);
   box-shadow:
     inset 0 1px 0 oklch(1 0 0 / 0.54),
     inset 0 -1px 0 oklch(1 0 0 / 0.1);
+}
+
+.metric-card:nth-child(1) > span {
+  border-color: oklch(0.68 0.14 158 / 0.36);
+  background:
+    linear-gradient(145deg, oklch(0.68 0.14 158 / 0.13), oklch(1 0 0 / 0.01)),
+    oklch(1 0 0 / 0.012);
+}
+
+.metric-card:nth-child(2) > span {
+  border-color: oklch(0.63 0.15 28 / 0.34);
+  background:
+    linear-gradient(145deg, oklch(0.63 0.15 28 / 0.11), oklch(1 0 0 / 0.01)),
+    oklch(1 0 0 / 0.012);
+}
+
+.metric-card:nth-child(3) > span {
+  border-color: oklch(0.72 0.14 82 / 0.36);
+  background:
+    linear-gradient(145deg, oklch(0.72 0.14 82 / 0.12), oklch(1 0 0 / 0.01)),
+    oklch(1 0 0 / 0.012);
 }
 
 .metric-card svg {
@@ -1373,7 +1451,7 @@ svg {
 }
 
 .ledger-list b.income {
-  color: oklch(0.42 0.13 150);
+  color: var(--accent-ink);
 }
 
 .ledger-list b.expense {
@@ -1414,12 +1492,12 @@ input:focus-visible {
 @media (hover: hover) and (pointer: fine) {
   .glass-panel:hover,
   .glass-sheet:hover {
-    border-color: oklch(1 0 0 / 0.68);
+    border-color: oklch(1 0 0 / 0.52);
     box-shadow:
-      0 4px 8px oklch(0.34 0 0 / 0.045),
-      inset 0 1px 0 oklch(1 0 0 / 0.82),
-      inset 0 -1px 0 oklch(1 0 0 / 0.18),
-      inset 0 0 8px oklch(1 0 0 / 0.075);
+      0 4px 8px oklch(0.34 0 0 / 0.032),
+      inset 0 1px 0 oklch(1 0 0 / 0.68),
+      inset 0 -1px 0 oklch(1 0 0 / 0.12),
+      inset 0 0 8px oklch(1 0 0 / 0.052);
     transform: translateY(-2px);
   }
 
@@ -1439,7 +1517,7 @@ input:focus-visible {
   .decision-list article:hover,
   .risk-row:hover,
   .metric-card:hover {
-    border-color: oklch(1 0 0 / 0.68);
+    border-color: oklch(0.68 0.14 158 / 0.34);
     transform: translateY(-2px);
   }
 
