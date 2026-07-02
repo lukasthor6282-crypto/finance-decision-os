@@ -34,14 +34,24 @@ async def lifespan(app: FastAPI):
     yield
 
 
+DEFAULT_ALLOWED_ORIGINS = ",".join(
+    [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "https://finance-decision-os.pages.dev",
+    ]
+)
+allowed_origins = [
+    origin.strip()
+    for origin in os.getenv("ALLOWED_ORIGINS", DEFAULT_ALLOWED_ORIGINS).split(",")
+    if origin.strip()
+]
+
 app = FastAPI(title="Finance Decision OS", version="0.2.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        origin.strip()
-        for origin in os.getenv("ALLOWED_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").split(",")
-        if origin.strip()
-    ],
+    allow_origins=allowed_origins,
+    allow_origin_regex=r"https://([a-z0-9-]+\.)?finance-decision-os\.pages\.dev",
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
