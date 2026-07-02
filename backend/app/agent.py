@@ -227,8 +227,8 @@ def correct_work_session_from_chat(conn: Connection, session: ParsedWorkSession)
             data={**session.__dict__, "corrected": False},
         )
 
-    old_hours = float(previous["hours"])
-    old_amount = float(previous["gross_amount"])
+    old_hours = float(previous.get("total_hours", previous["hours"]))
+    old_amount = float(previous.get("total_gross_amount", previous["gross_amount"]))
     result = update_work_session(conn, previous["id"], session)
     summary = summarize(conn)
     kpis = summary["kpis"]
@@ -255,6 +255,7 @@ def correct_work_session_from_chat(conn: Connection, session: ParsedWorkSession)
             "corrected": True,
             "previousHours": old_hours,
             "previousAmount": old_amount,
+            "duplicatesMerged": previous.get("duplicate_count", 0),
             "delta": round(delta, 2),
             "balance": kpis["balance"],
         },

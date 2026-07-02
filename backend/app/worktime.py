@@ -197,6 +197,7 @@ def normalize_work_text(text: str) -> str:
     normalized = normalized.lower()
     normalized = normalized.replace("às", "as").replace("à", "a")
     normalized = normalized.replace("at?", "ate").replace("?s", "as")
+    normalized = re.sub(r"\b(\d{1,2})\s*(?:a;|a:|;|,|\.)\s*(\d{2})\b", r"\1:\2", normalized)
     return re.sub(r"\s+", " ", normalized).strip()
 
 
@@ -206,7 +207,14 @@ def is_work_correction_message(message: str) -> bool:
         marker in text
         for marker in [
             "falei errado",
+            "mandei errado",
             "errei",
+            "errado de novo",
+            "errado denovo",
+            "errado denov",
+            "denovo",
+            "denov",
+            "de novo",
             "corrigir",
             "corrige",
             "correcao",

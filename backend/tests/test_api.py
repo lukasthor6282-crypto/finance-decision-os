@@ -336,6 +336,46 @@ def test_agent_corrects_previous_work_session_without_duplicate(tmp_path, monkey
     assert dashboard["kpis"]["balance"] == 48
 
 
+def test_agent_correction_merges_existing_duplicate_work_sessions(tmp_path, monkeypatch):
+    client = make_empty_client(tmp_path, monkeypatch)
+
+    client.post(
+        "/api/agent/chat",
+        json={"message": "02/07/2026 trabalhei das 13:30 ate as 15:30 ganhando 12 por hora"},
+    )
+    client.post(
+        "/api/agent/chat",
+        json={"message": "02/07/2026 trabalhei das 13:30 ate as 17:00 ganhando 12 por hora"},
+    )
+
+    before = client.get("/api/dashboard", params={"month": "2026-07"}).json()
+    assert before["kpis"]["income"] == 66
+
+    correction = client.post(
+        "/api/agent/chat",
+        json={"message": "mandei errado denov, 02/07/2026 trabalhei das 13:30 as 17a;30"},
+    )
+
+    assert correction.status_code == 200
+    body = correction.json()
+    assert body["intent"] == "correct_work_session"
+    assert body["data"]["hours"] == 4
+    assert body["data"]["gross_amount"] == 48
+    assert body["data"]["duplicatesMerged"] == 1
+    assert body["data"]["delta"] == -18
+
+    sessions = client.get("/api/work-sessions").json()
+    transactions = client.get("/api/transactions").json()
+    dashboard = client.get("/api/dashboard", params={"month": "2026-07"}).json()
+
+    assert len(sessions) == 1
+    assert sessions[0]["end_time"] == "17:30"
+    assert len(transactions) == 1
+    assert transactions[0]["amount"] == 48
+    assert dashboard["kpis"]["income"] == 48
+    assert dashboard["kpis"]["balance"] == 48
+
+
 def test_goals_crud(tmp_path, monkeypatch):
     client = make_client(tmp_path, monkeypatch)
 

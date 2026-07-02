@@ -386,18 +386,17 @@ def existing_work_session(conn: Connection, session: ParsedWorkSession) -> dict 
 
 def find_work_session_for_correction(conn: Connection, session: ParsedWorkSession) -> dict | None:
     if session.start_time:
-        row = conn.execute(
+        rows = conn.execute(
             """
             SELECT id, transaction_id, date, start_time, end_time, hours, gross_amount
             FROM work_sessions
             WHERE date = ? AND start_time = ?
             ORDER BY id DESC
-            LIMIT 1
             """,
             (session.date, session.start_time),
-        ).fetchone()
-        if row:
-            return dict(row)
+        ).fetchall()
+        if rows:
+            return correction_group(rows)
 
     row = conn.execute(
         """
@@ -412,6 +411,17 @@ def find_work_session_for_correction(conn: Connection, session: ParsedWorkSessio
     return dict(row) if row else None
 
 
+def correction_group(rows) -> dict:
+    items = [dict(row) for row in rows]
+    keep = items[0]
+    keep["duplicate_ids"] = [item["id"] for item in items[1:]]
+    keep["duplicate_transaction_ids"] = [item["transaction_id"] for item in items[1:] if item.get("transaction_id")]
+    keep["total_hours"] = round(sum(float(item["hours"]) for item in items), 4)
+    keep["total_gross_amount"] = round(sum(float(item["gross_amount"]) for item in items), 2)
+    keep["duplicate_count"] = len(items) - 1
+    return keep
+
+
 def update_work_session(conn: Connection, session_id: int, session: ParsedWorkSession) -> WorkSessionResult:
     row = conn.execute(
         "SELECT id, transaction_id FROM work_sessions WHERE id = ?",
@@ -419,6 +429,20 @@ def update_work_session(conn: Connection, session_id: int, session: ParsedWorkSe
     ).fetchone()
     if not row:
         return WorkSessionResult(None, None, False)
+
+    if session.start_time:
+        duplicates = conn.execute(
+            """
+            SELECT id, transaction_id
+            FROM work_sessions
+            WHERE date = ? AND start_time = ? AND id <> ?
+            """,
+            (session.date, session.start_time, session_id),
+        ).fetchall()
+        for duplicate in duplicates:
+            if duplicate["transaction_id"]:
+                conn.execute("DELETE FROM transactions WHERE id = ?", (duplicate["transaction_id"],))
+            conn.execute("DELETE FROM work_sessions WHERE id = ?", (duplicate["id"],))
 
     conn.execute(
         """
