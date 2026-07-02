@@ -18,7 +18,37 @@ def make_client(tmp_path, monkeypatch):
 
     importlib.reload(main)
     main.startup()
+    client = TestClient(main.app)
+    client.post("/api/seed")
+    return client
+
+
+def make_empty_client(tmp_path, monkeypatch):
+    db_path = tmp_path / "finance-empty-test.db"
+    monkeypatch.setenv("FINANCE_DB_PATH", str(db_path))
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.delenv("APP_PASSWORD", raising=False)
+
+    import app.db as db
+
+    importlib.reload(db)
+    import app.main as main
+
+    importlib.reload(main)
+    main.startup()
     return TestClient(main.app)
+
+
+def test_dashboard_starts_empty_without_demo_seed(tmp_path, monkeypatch):
+    client = make_empty_client(tmp_path, monkeypatch)
+
+    response = client.get("/api/dashboard")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["kpis"]["balance"] == 0
+    assert body["recentTransactions"] == []
+    assert body["actionPlan"] == []
 
 
 def test_dashboard_has_decision_data(tmp_path, monkeypatch):

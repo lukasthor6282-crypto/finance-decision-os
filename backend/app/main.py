@@ -24,8 +24,9 @@ from .seed import seed_demo
 
 def startup() -> None:
     init_db()
-    with connect() as conn:
-        seed_demo(conn)
+    if os.getenv("SEED_DEMO", "").lower() == "true":
+        with connect() as conn:
+            seed_demo(conn)
 
 
 @asynccontextmanager
@@ -289,6 +290,16 @@ def api_seed() -> dict:
     with connect() as conn:
         seed_demo(conn)
     return {"ok": True}
+
+
+@app.delete("/api/admin/demo-data")
+def api_delete_demo_data() -> dict:
+    with connect() as conn:
+        deleted = {}
+        for table in ("transactions", "budgets", "goals", "chat_messages", "learned_patterns"):
+            cursor = conn.execute(f"DELETE FROM {table}")
+            deleted[table] = cursor.rowcount
+        return {"ok": True, "deleted": deleted}
 
 
 def normalize_row(row: dict) -> dict:

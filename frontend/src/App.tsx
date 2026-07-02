@@ -242,7 +242,9 @@ function App() {
                   {error
                     ? 'Backend indisponivel. Verifique Render e variaveis.'
                     : summary
-                      ? `Revisei ${summary.recentTransactions.length} lancamentos recentes e ${summary.actionPlan.length} acoes.`
+                      ? summary.recentTransactions.length
+                        ? `Revisei ${summary.recentTransactions.length} lancamentos recentes e ${summary.actionPlan.length} acoes.`
+                        : 'Sem dados pessoais ainda. Registre receitas e despesas pelo chat.'
                       : 'Conectando ao backend financeiro...'}
                 </p>
               </div>
@@ -288,7 +290,7 @@ function App() {
                 <button type="button" onClick={() => void loadDashboard()}><SlidersHorizontal size={15} /> Recarregar</button>
               </div>
               <strong>{money(summary?.kpis.balance)}</strong>
-              <p>saldo atual depois dos dados do backend</p>
+              <p>{summary?.recentTransactions.length ? 'saldo atual pelos seus lancamentos' : 'sem lancamentos pessoais ainda'}</p>
               <div className="mini-line" aria-label="Fluxo projetado">
                 {(summary?.monthlySeries.slice(-6) ?? []).map((point) => (
                   <i key={point.month} style={{ height: `${Math.max(18, Math.min(58, Math.abs(point.net) / 180))}px` }} />
@@ -315,10 +317,10 @@ function App() {
                 {!decisions.length && (
                   <article>
                     <div>
-                      <strong>Aguardando backend</strong>
-                      <p>Sem plano de acao carregado ainda.</p>
+                      <strong>Sem dados ainda</strong>
+                      <p>Registre receita ou despesa pelo chat para gerar analise.</p>
                     </div>
-                    <span>sync</span>
+                    <span>vazio</span>
                   </article>
                 )}
               </div>
@@ -360,7 +362,9 @@ function App() {
               <MessageCircle size={17} />
             </div>
             <p>
-              {summary?.insights[0]?.message ?? (error || 'Backend conectado. Use chat, atualizar e importar CSV.')}
+              {summary?.recentTransactions.length
+                ? (summary?.insights[0]?.message ?? 'Dados pessoais carregados.')
+                : (error || 'Sem dados pessoais. Ex.: hoje ganhei R$250, gastei R$80 no mercado.')}
             </p>
             <div className="ledger-list" aria-label="Lancamentos recentes">
               {(summary?.recentTransactions.slice(0, 5) ?? []).map((transaction) => (

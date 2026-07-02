@@ -65,6 +65,9 @@ def summarize(conn: Connection, month: str | None = None) -> dict:
     transactions = get_transactions(conn, 2000)
     today = date.today()
     month_key = month or today.strftime("%Y-%m")
+    if not transactions:
+        return empty_summary(today.isoformat(), month_key)
+
     current_month = [tx for tx in transactions if tx["date"].startswith(month_key)]
     if not current_month and transactions and month is None:
         month_key = max(tx["date"][:7] for tx in transactions)
@@ -125,6 +128,38 @@ def summarize(conn: Connection, month: str | None = None) -> dict:
         "actionPlan": action_plan,
         "goals": goals,
         "insights": build_insights(savings_rate, category_spend, budget_status, anomalies, recurring, goals),
+    }
+
+
+def empty_summary(as_of: str, month_key: str) -> dict:
+    return {
+        "asOf": as_of,
+        "month": month_key,
+        "kpis": {
+            "balance": 0,
+            "income": 0,
+            "expenses": 0,
+            "previousExpenses": 0,
+            "net": 0,
+            "savingsRate": 0,
+            "projectedExpense": 0,
+            "projectedBalance": 0,
+            "dailyBurn": 0,
+            "runwayDays": None,
+            "cashRisk": "Sem dados",
+            "riskLevel": "ok",
+            "healthScore": 0,
+            "healthLabel": "Sem dados",
+        },
+        "monthlySeries": [],
+        "categorySpend": [],
+        "budgetStatus": [],
+        "recurring": [],
+        "anomalies": [],
+        "recentTransactions": [],
+        "actionPlan": [],
+        "goals": [],
+        "insights": [],
     }
 
 
