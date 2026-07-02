@@ -1,7 +1,47 @@
 import type { AgentReply, FinanceSummary, Goal, Insight, Transaction } from './types'
 
+const API_BASE_URL = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '')
+const AUTH_STORAGE_KEY = 'finance-os-basic-auth'
+
+function apiUrl(path: string) {
+  return `${API_BASE_URL}${path}`
+}
+
+function authHeaders(headers?: HeadersInit) {
+  const nextHeaders = new Headers(headers)
+  const token = localStorage.getItem(AUTH_STORAGE_KEY)
+  if (token && !nextHeaders.has('Authorization')) {
+    nextHeaders.set('Authorization', `Basic ${token}`)
+  }
+  return nextHeaders
+}
+
+function encodeBasicAuth(username: string, password: string) {
+  return btoa(unescape(encodeURIComponent(`${username}:${password}`)))
+}
+
+function askCredentials() {
+  const username = window.prompt('Usuario')
+  if (!username) return null
+  const password = window.prompt('Senha')
+  if (!password) return null
+  const token = encodeBasicAuth(username, password)
+  localStorage.setItem(AUTH_STORAGE_KEY, token)
+  return token
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const response = await fetch(path, options)
+  const requestOptions: RequestInit = { ...options, headers: authHeaders(options?.headers) }
+  let response = await fetch(apiUrl(path), requestOptions)
+  if (response.status === 401) {
+    localStorage.removeItem(AUTH_STORAGE_KEY)
+    const token = askCredentials()
+    if (token) {
+      const headers = authHeaders(options?.headers)
+      headers.set('Authorization', `Basic ${token}`)
+      response = await fetch(apiUrl(path), { ...options, headers })
+    }
+  }
   if (!response.ok) {
     const text = await response.text()
     throw new Error(text || response.statusText)

@@ -15,7 +15,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .agent import answer
 from .analytics import get_transactions, scenario, summarize
-from .db import connect, init_db
+from .db import connect, init_db, is_postgres
 from .normalization import parse_amount, parse_date
 from .repository import insert_transaction, list_budgets, list_goals
 from .schemas import AgentRequest, AgentResponse, BudgetIn, GoalIn, GoalPatch, ScenarioRequest, TransactionIn
@@ -37,8 +37,12 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Finance Decision OS", version="0.2.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
-    allow_credentials=True,
+    allow_origins=[
+        origin.strip()
+        for origin in os.getenv("ALLOWED_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").split(",")
+        if origin.strip()
+    ],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -167,14 +171,17 @@ def api_goals() -> list[dict]:
 @app.post("/api/goals")
 def api_create_goal(payload: GoalIn) -> dict:
     with connect() as conn:
+        returning = " RETURNING id" if is_postgres(conn) else ""
         cursor = conn.execute(
-            """
+            f"""
             INSERT INTO goals (name, target_amount, current_amount, due_date, priority)
             VALUES (?, ?, ?, ?, ?)
+            {returning}
             """,
             (payload.name, payload.target_amount, payload.current_amount, payload.due_date, payload.priority),
         )
-        return {"id": cursor.lastrowid, "ok": True}
+        goal_id = cursor.fetchone()["id"] if is_postgres(conn) else cursor.lastrowid
+        return {"id": goal_id, "ok": True}
 
 
 @app.patch("/api/goals/{goal_id}")

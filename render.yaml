@@ -1,17 +1,22 @@
 services:
   - type: web
-    name: finance-decision-os
-    runtime: docker
-    plan: starter
+    name: finance-decision-os-api
+    runtime: python
+    rootDir: backend
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /api/health
-    disk:
-      name: finance-data
-      mountPath: /data
-      sizeGB: 1
     envVars:
-      - key: FINANCE_DB_PATH
-        value: /data/finance.db
-      - key: STATIC_DIR
-        value: /app/static
+      - key: PYTHON_VERSION
+        value: 3.12.4
       - key: APP_USER
         value: lukas
+      - key: ALLOWED_ORIGINS
+        value: "*"
+      - key: DATABASE_URL
+        sync: false
+      - key: APP_PASSWORD
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false

@@ -51,45 +51,63 @@ cd backend
 .\.venv\Scripts\python.exe -m pytest -q
 ```
 
-## Deploy simples
+## Deploy gratis recomendado
 
-Este projeto agora pode rodar como 1 container:
+Arquitetura:
 
-- FastAPI serve `/api/*`.
-- O frontend Vite fica servido pelo mesmo backend.
-- SQLite fica em `/data/finance.db`.
-- Se `APP_PASSWORD` existir, o app fica protegido por login/senha Basic Auth.
+- Banco: Supabase Free Postgres.
+- Backend: Render Free.
+- Frontend: Cloudflare Pages Free.
 
-### Railway recomendado
+### 1. Supabase
 
-Use para coisa pessoal simples:
+Crie um projeto no Supabase e copie a connection string Postgres.
 
-1. Envie este projeto para GitHub.
-2. No Railway, crie um projeto pelo repo.
-3. Ele detecta o `Dockerfile`.
-4. Crie um Volume no servico e monte em `/data`.
-5. Variaveis:
+Use formato parecido:
 
 ```text
-FINANCE_DB_PATH=/data/finance.db
-STATIC_DIR=/app/static
+postgresql://postgres.xxxxx:SENHA@aws-...supabase.com:6543/postgres?sslmode=require
+```
+
+### 2. Render backend
+
+Crie Web Service pelo GitHub usando este repo.
+
+Config:
+
+```text
+Root Directory: backend
+Build Command: pip install -r requirements.txt
+Start Command: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+Plan: Free
+```
+
+Variaveis:
+
+```text
+DATABASE_URL=sua_url_do_supabase
 APP_USER=lukas
-APP_PASSWORD=uma_senha_forte
+APP_PASSWORD=sua_senha_forte
+ALLOWED_ORIGINS=*
 OPENAI_API_KEY=opcional
 ```
 
-### Render alternativo
+### 3. Cloudflare Pages frontend
 
-Use `render.yaml`. Ele ja declara Docker, healthcheck e disk em `/data`.
-Defina `APP_PASSWORD` no painel.
+Crie Pages pelo GitHub.
 
-### VPS local/barato
+Config:
 
-Com Docker instalado:
-
-```powershell
-$env:APP_PASSWORD="uma_senha_forte"
-docker compose up -d --build
+```text
+Root directory: frontend
+Build command: npm run build
+Build output directory: dist
 ```
 
-Abra `http://SEU_IP:8000`.
+Variavel:
+
+```text
+VITE_API_URL=https://seu-backend.onrender.com
+```
+
+Depois do deploy, abra a URL do Cloudflare. Login: `APP_USER` + `APP_PASSWORD`.

@@ -5,6 +5,7 @@ from datetime import date, timedelta
 from sqlite3 import Connection
 
 from .classifier import classify
+from .db import is_postgres
 from .repository import insert_transaction
 
 
@@ -75,8 +76,11 @@ def seed_demo(conn: Connection) -> None:
             },
             source=source,
         )
+    budget_sql = "INSERT OR IGNORE INTO budgets (category, monthly_limit) VALUES (?, ?)"
+    if is_postgres(conn):
+        budget_sql = "INSERT INTO budgets (category, monthly_limit) VALUES (?, ?) ON CONFLICT(category) DO NOTHING"
     conn.executemany(
-        "INSERT OR IGNORE INTO budgets (category, monthly_limit) VALUES (?, ?)",
+        budget_sql,
         [
             ("Mercado", 1900),
             ("Alimentação", 1200),
