@@ -18,6 +18,7 @@ from .analytics import (
 )
 from .normalization import normalize_text
 from .repository import get_float_fact
+from .strategic_planner import answer_strategic_plan, asks_strategic_plan
 
 
 MONTHS = {
@@ -62,6 +63,9 @@ def answer_question(conn: Connection, message: str) -> dict | None:
     text = normalize_text(message)
     period_data = infer_period(text)
     month_key = period_data["month"]
+
+    if asks_strategic_plan(message):
+        return answer_strategic_plan(conn, message)
 
     if asks_hourly_rate_question(text):
         return hourly_rate_answer(conn)

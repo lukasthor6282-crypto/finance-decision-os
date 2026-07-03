@@ -419,6 +419,44 @@ def test_agent_correction_merges_existing_duplicate_work_sessions(tmp_path, monk
     assert dashboard["kpis"]["balance"] == 48
 
 
+def test_agent_builds_strategic_plan_without_inventing_target_price(tmp_path, monkeypatch):
+    client = make_empty_client(tmp_path, monkeypatch)
+
+    response = client.post(
+        "/api/agent/chat",
+        json={
+            "message": "ganho em media 1200 por mes, antes dos 22 eu quero comprar um byd king, qual o melhor plano para mim?"
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["intent"] == "strategic_plan"
+    assert body["data"]["goalName"] == "BYD King"
+    assert body["data"]["monthlyIncome"] == 1200
+    assert body["data"]["targetAge"] == 22
+    assert body["data"]["targetAmount"] is None
+    assert "preco alvo ou entrada desejada" in body["data"]["missing"]
+    assert "Nao vou inventar" in body["answer"]
+
+
+def test_agent_builds_strategic_plan_with_required_monthly_amount(tmp_path, monkeypatch):
+    client = make_empty_client(tmp_path, monkeypatch)
+
+    response = client.post(
+        "/api/agent/chat",
+        json={"message": "tenho 20 anos, ganho 1200 por mes e quero comprar uma moto por R$ 12000 antes dos 22"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["intent"] == "strategic_plan"
+    assert body["data"]["goalName"] == "Moto"
+    assert body["data"]["monthsLeft"] == 24
+    assert body["data"]["targetAmount"] == 12000
+    assert body["data"]["monthlyRequired"] == 500
+
+
 def test_goals_crud(tmp_path, monkeypatch):
     client = make_client(tmp_path, monkeypatch)
 
