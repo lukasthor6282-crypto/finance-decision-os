@@ -1,4 +1,4 @@
-import type { AgentReply, CategoryRule, Commitment, FinanceSummary, Goal, Insight, Transaction, WorkSession } from './types'
+import type { AgentReply, CategoryRule, Commitment, FinanceSummary, Goal, ImportMapping, ImportPreview, ImportResult, Insight, Transaction, WorkSession } from './types'
 
 const DEFAULT_PRODUCTION_API_URL = 'https://finance-decision-os.onrender.com'
 const API_BASE_URL = resolveApiBaseUrl()
@@ -120,14 +120,40 @@ export function askAgent(message: string) {
   })
 }
 
-export function importCsv(file: File) {
+const IMPORT_FIELD_PARAMS: Record<keyof ImportMapping, string> = {
+  date: 'date_column',
+  description: 'description_column',
+  amount: 'amount_column',
+  account: 'account_column',
+  transaction_type: 'transaction_type_column',
+  payment_method: 'payment_method_column',
+  category: 'category_column',
+  notes: 'notes_column',
+}
+
+export function previewImport(file: File) {
   const body = new FormData()
   body.append('file', file)
-  return request<{ imported: number; duplicated: number; skipped: number }>('/api/import', {
+  return request<ImportPreview>('/api/import/preview', {
     method: 'POST',
     body,
   })
 }
+
+export function importStatement(file: File, mapping: ImportMapping = {}) {
+  const body = new FormData()
+  body.append('file', file)
+  for (const [field, param] of Object.entries(IMPORT_FIELD_PARAMS)) {
+    const value = mapping[field as keyof ImportMapping]
+    if (value) body.append(param, value)
+  }
+  return request<ImportResult>('/api/import', {
+    method: 'POST',
+    body,
+  })
+}
+
+export const importCsv = importStatement
 
 export function getCategoryRules() {
   return request<CategoryRule[]>('/api/category-rules')

@@ -141,7 +141,9 @@ svg {
 .money-hero button,
 .work-hero button,
 .work-form button,
-.rule-library button {
+.rule-library button,
+.data-hero button,
+.data-mapping button {
   position: relative;
   z-index: 1;
   min-width: 44px;
@@ -206,7 +208,9 @@ svg {
 .money-hero button:hover,
 .work-hero button:hover,
 .work-form button:hover,
-.rule-library button:hover {
+.rule-library button:hover,
+.data-hero button:hover,
+.data-mapping button:hover {
   background: oklch(1 0 0 / 0.06);
 }
 
@@ -217,7 +221,9 @@ svg {
 .ask-box button:active,
 .money-hero button:active,
 .work-hero button:active,
-.work-form button:active {
+.work-form button:active,
+.data-hero button:active,
+.data-mapping button:active {
   transform: scale(0.97);
   transition-duration: 120ms;
 }
@@ -330,6 +336,10 @@ svg {
 .money-hero,
 .commitment-panel,
 .money-transactions,
+.data-hero,
+.data-mapping,
+.data-preview,
+.data-rules,
 .metric-card {
   background:
     linear-gradient(145deg, oklch(1 0 0 / 0.095), oklch(1 0 0 / 0.032) 48%, oklch(1 0 0 / 0.014)),
@@ -584,7 +594,9 @@ svg {
 .rules-actions button,
 .rule-form button,
 .work-hero button,
-.work-form button {
+.work-form button,
+.data-hero button,
+.data-mapping button {
   min-width: 0;
   padding: 0 13px;
   color: var(--text);
@@ -666,7 +678,8 @@ svg {
 
 .rules-table label,
 .rule-form label,
-.work-form label {
+.work-form label,
+.data-mapping label {
   display: grid;
   gap: 7px;
   color: var(--text);
@@ -680,7 +693,8 @@ svg {
 .rules-table select,
 .rule-form select,
 .rule-form input:not([type='checkbox']),
-.work-form input {
+.work-form input,
+.data-mapping select {
   width: 100%;
   min-height: 44px;
   color: var(--heading);
@@ -699,7 +713,8 @@ svg {
 .rules-table select:focus,
 .rule-form select:focus,
 .rule-form input:focus,
-.work-form input:focus {
+.work-form input:focus,
+.data-mapping select:focus {
   border-color: oklch(0.68 0.14 158 / 0.46);
 }
 
@@ -733,7 +748,8 @@ svg {
 }
 
 .rule-form button,
-.work-form button {
+.work-form button,
+.data-mapping button {
   width: 100%;
   margin-top: 2px;
 }
@@ -1154,6 +1170,165 @@ svg {
   grid-template-columns: 1fr;
 }
 
+.data-grid {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
+  grid-template-areas:
+    "hero hero"
+    "mapping rules"
+    "preview preview";
+  gap: 14px;
+}
+
+.data-hero,
+.data-mapping,
+.data-preview,
+.data-rules {
+  border-radius: 16px;
+  padding: 18px;
+}
+
+.data-hero {
+  grid-area: hero;
+  min-height: 148px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 18px;
+}
+
+.data-hero span {
+  color: var(--muted);
+  font: 720 12px/1 var(--ui);
+}
+
+.data-hero h1 {
+  margin-top: 10px;
+  color: var(--heading);
+  font: 780 34px/1.05 var(--display);
+}
+
+.data-hero p {
+  max-width: 720px;
+  margin-top: 10px;
+  color: var(--muted);
+  font: 540 14px/1.55 var(--ui);
+}
+
+.data-mapping {
+  grid-area: mapping;
+  display: grid;
+  align-content: start;
+  gap: 16px;
+}
+
+.mapping-grid {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.data-preview {
+  grid-area: preview;
+  min-width: 0;
+}
+
+.preview-table {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.preview-head,
+.preview-table article {
+  display: grid;
+  min-width: 620px;
+  align-items: center;
+  gap: 10px;
+}
+
+.preview-head {
+  padding: 0 12px 2px;
+  color: var(--muted);
+  font: 760 11px/1 var(--ui);
+}
+
+.preview-table article,
+.data-preview .empty-row,
+.data-checklist article {
+  min-height: 62px;
+  padding: 12px;
+  border: 1px solid oklch(1 0 0 / 0.34);
+  border-radius: 14px;
+  background:
+    linear-gradient(145deg, oklch(1 0 0 / 0.046), oklch(1 0 0 / 0.009)),
+    oklch(1 0 0 / 0.01);
+  box-shadow: inset 0 1px 0 oklch(1 0 0 / 0.48);
+  backdrop-filter: blur(34px) saturate(165%);
+  -webkit-backdrop-filter: blur(34px) saturate(165%);
+  animation: item-rise 220ms var(--ease-out) backwards;
+}
+
+.preview-table article span {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--heading);
+  font: 660 12px/1.25 var(--ui);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.data-preview .empty-row {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 7px;
+  margin-top: 16px;
+}
+
+.data-preview .empty-row strong,
+.data-checklist strong {
+  color: var(--heading);
+  font: 760 14px/1.15 var(--ui);
+}
+
+.data-preview .empty-row small,
+.data-checklist span {
+  color: var(--muted);
+  font: 560 12px/1.4 var(--ui);
+}
+
+.data-rules {
+  grid-area: rules;
+  min-width: 0;
+}
+
+.data-checklist {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.data-checklist article {
+  display: grid;
+  gap: 7px;
+}
+
+.data-mapping button:disabled,
+.data-hero button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
 .right-column {
   grid-area: right;
   min-width: 0;
@@ -1474,7 +1649,8 @@ svg {
 
 button:focus-visible,
 a:focus-visible,
-input:focus-visible {
+input:focus-visible,
+select:focus-visible {
   outline: 3px solid oklch(0.75 0.13 145 / 0.48);
   outline-offset: 3px;
 }
@@ -1524,7 +1700,9 @@ input:focus-visible {
   .side-rail button:hover,
   .top-tools button:hover,
   .panel-title button:hover,
-  .ask-box button:hover {
+  .ask-box button:hover,
+  .data-hero button:hover,
+  .data-mapping button:hover {
     transform: translateY(-1px);
   }
 
@@ -1539,7 +1717,9 @@ input:focus-visible {
   .side-rail button:active,
   .top-tools button:active,
   .panel-title button:active,
-  .ask-box button:active {
+  .ask-box button:active,
+  .data-hero button:active,
+  .data-mapping button:active {
     transform: scale(0.97);
   }
 }
@@ -1695,6 +1875,15 @@ input:focus-visible {
       "transactions";
   }
 
+  .data-grid {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "hero"
+      "mapping"
+      "rules"
+      "preview";
+  }
+
   .right-column {
     grid-template-columns: 1fr 1fr;
     grid-template-rows: auto;
@@ -1771,12 +1960,24 @@ input:focus-visible {
     grid-template-columns: 1fr;
   }
 
+  .data-hero {
+    grid-template-columns: 1fr;
+  }
+
   .work-hero button {
     width: 100%;
   }
 
   .money-hero button {
     width: 100%;
+  }
+
+  .data-hero button {
+    width: 100%;
+  }
+
+  .mapping-grid {
+    grid-template-columns: 1fr;
   }
 
   .work-kpis,

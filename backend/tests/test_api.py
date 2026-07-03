@@ -79,6 +79,45 @@ def test_import_deduplicates_csv(tmp_path, monkeypatch):
     assert body["duplicated"] == 1
 
 
+def test_import_preview_and_manual_mapping_for_custom_statement(tmp_path, monkeypatch):
+    client = make_empty_client(tmp_path, monkeypatch)
+    csv_body = "Dia;Historico;Quantia;Banco;Natureza;Forma\n01/07/2026;Padaria bairro;18,50;Nubank;Despesa;Debito\n02/07/2026;Pix recebido cliente;250,00;Nubank;Receita;Pix\n"
+
+    preview = client.post(
+        "/api/import/preview",
+        files={"file": ("extrato.csv", csv_body.encode("utf-8"), "text/csv")},
+    )
+
+    assert preview.status_code == 200
+    assert "Dia" in preview.json()["columns"]
+
+    response = client.post(
+        "/api/import",
+        data={
+            "date_column": "Dia",
+            "description_column": "Historico",
+            "amount_column": "Quantia",
+            "account_column": "Banco",
+            "transaction_type_column": "Natureza",
+            "payment_method_column": "Forma",
+        },
+        files={"file": ("extrato.csv", csv_body.encode("utf-8"), "text/csv")},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["imported"] == 2
+    assert body["skipped"] == 0
+
+    summary = client.get("/api/dashboard", params={"month": "2026-07"}).json()
+    transactions = client.get("/api/transactions").json()
+
+    assert summary["kpis"]["income"] == 250
+    assert summary["kpis"]["expenses"] == 18.5
+    assert any(tx["description"] == "Padaria bairro" and tx["amount"] == -18.5 for tx in transactions)
+    assert any("forma_pagamento: Debito" in (tx.get("notes") or "") for tx in transactions)
+
+
 def test_agent_purchase_decision(tmp_path, monkeypatch):
     client = make_client(tmp_path, monkeypatch)
 

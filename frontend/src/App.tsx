@@ -1,5 +1,5 @@
 import type { FormEvent } from 'react'
-import type { CategoryRule, Commitment, FinanceSummary, Transaction, WorkSession } from './types'
+import type { CategoryRule, Commitment, FinanceSummary, ImportMapping, ImportPreview, Transaction, WorkSession } from './types'
 import {
   Bell,
   Bot,
@@ -35,7 +35,8 @@ import {
   getSummary,
   getTransactions,
   getWorkSessions,
-  importCsv,
+  importStatement,
+  previewImport,
   reprocessTransactions,
   updateTransactionCategory,
 } from './api'
@@ -102,6 +103,17 @@ const TRANSACTION_TYPES = [
 
 const INTERNAL_TYPES = new Set(['transfer', 'card_payment', 'investment'])
 
+const IMPORT_FIELDS: Array<{ key: keyof ImportMapping; label: string; required?: boolean }> = [
+  { key: 'date', label: 'Data', required: true },
+  { key: 'description', label: 'Descricao', required: true },
+  { key: 'amount', label: 'Valor', required: true },
+  { key: 'account', label: 'Banco/conta' },
+  { key: 'transaction_type', label: 'Tipo' },
+  { key: 'payment_method', label: 'Forma de pagamento' },
+  { key: 'category', label: 'Categoria' },
+  { key: 'notes', label: 'Observacao' },
+]
+
 function App() {
   const [summary, setSummary] = useState<FinanceSummary | null>(null)
   const [messages, setMessages] = useState<ChatMessage[]>(fallbackMessages)
@@ -114,6 +126,9 @@ function App() {
   const [workSessions, setWorkSessions] = useState<WorkSession[]>([])
   const [commitments, setCommitments] = useState<Commitment[]>([])
   const [categoryRules, setCategoryRules] = useState<CategoryRule[]>([])
+  const [importFile, setImportFile] = useState<File | null>(null)
+  const [importPreview, setImportPreview] = useState<ImportPreview | null>(null)
+  const [importMapping, setImportMapping] = useState<ImportMapping>({})
   const [rulesLoading, setRulesLoading] = useState(false)
   const [workLoading, setWorkLoading] = useState(false)
   const [moneyLoading, setMoneyLoading] = useState(false)
@@ -350,26 +365,65 @@ function App() {
     }
   }
 
-  const handleImport = async (file: File | undefined) => {
+  const handleImportPreview = async (file: File | undefined) => {
     if (!file) return
     setBusy(true)
     setError('')
+    setNotice('')
     try {
-      const result = await importCsv(file)
-      setMessages((current) => [
-        ...current,
-        {
-          author: 'Finance OS',
-          text: `CSV importado: ${result.imported} novos, ${result.duplicated} duplicados, ${result.skipped} ignorados.`,
-        },
-      ])
-      await loadDashboard()
+      const preview = await previewImport(file)
+      setImportFile(file)
+      setImportPreview(preview)
+      setImportMapping(preview.detectedMapping ?? {})
+      setNotice('Colunas lidas. Confira o mapeamento antes de importar.')
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Falha ao importar CSV')
+      setError(err instanceof Error ? err.message : 'Falha ao ler extrato')
     } finally {
       setBusy(false)
       if (fileInputRef.current) fileInputRef.current.value = ''
     }
+  }
+
+  const handleFileSelected = async (file: File | undefined) => {
+    if (!file) return
+    if (activeNav === 'Dados') {
+      await handleImportPreview(file)
+      return
+    }
+    await handleImport(file)
+  }
+
+  const handleImport = async (file: File | undefined, mapping: ImportMapping = {}) => {
+    if (!file) return
+    setBusy(true)
+    setError('')
+    try {
+      const result = await importStatement(file, mapping)
+      setMessages((current) => [
+        ...current,
+        {
+          author: 'Finance OS',
+          text: `Extrato importado: ${result.imported} novos, ${result.duplicated} duplicados, ${result.skipped} ignorados.`,
+        },
+      ])
+      setNotice(`Importado: ${result.imported} novos, ${result.duplicated} duplicados, ${result.skipped} ignorados.`)
+      if (result.errors?.length) setError(result.errors.slice(0, 3).join(' | '))
+      await loadDashboard()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Falha ao importar extrato')
+    } finally {
+      setBusy(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  const handleMappedImport = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!importFile) {
+      setError('Selecione um CSV ou Excel primeiro.')
+      return
+    }
+    await handleImport(importFile, importMapping)
   }
 
   const handleTransactionPatch = async (transaction: Transaction, patch: Partial<Transaction>) => {
@@ -510,15 +564,15 @@ function App() {
               <RefreshCw size={16} /> Atualizar
             </button>
             <button type="button" onClick={() => fileInputRef.current?.click()}>
-              <Upload size={16} /> Importar CSV
+              <Upload size={16} /> Importar extrato
             </button>
             <input
               ref={fileInputRef}
-              aria-label="Importar CSV"
+              aria-label="Importar extrato"
               hidden
               type="file"
-              accept=".csv,text/csv"
-              onChange={(event) => void handleImport(event.target.files?.[0])}
+              accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+              onChange={(event) => void handleFileSelected(event.target.files?.[0])}
             />
           </div>
         </header>
@@ -921,6 +975,103 @@ function App() {
                     <small>Ex.: trabalhei das 13:30 ate 17:30 ganhando R$12 por hora.</small>
                   </article>
                 )}
+              </div>
+            </section>
+          </main>
+        ) : activeNav === 'Dados' ? (
+          <main className="data-grid">
+            <section className="data-hero glass-panel">
+              <div>
+                <span>Importacao de extratos</span>
+                <h1>Dados financeiros</h1>
+                <p>Importe CSV ou Excel, confira as colunas e mapeie os campos antes de gravar no banco.</p>
+              </div>
+              <button type="button" onClick={() => fileInputRef.current?.click()} disabled={busy}>
+                <Upload size={16} /> Selecionar arquivo
+              </button>
+              {(notice || error) && <p className={error ? 'rules-feedback danger' : 'rules-feedback'}>{error || notice}</p>}
+            </section>
+
+            <form className="data-mapping glass-panel" onSubmit={handleMappedImport}>
+              <div className="panel-title">
+                <h2>Mapeamento</h2>
+                <span>{importFile?.name ?? 'sem arquivo'}</span>
+              </div>
+              <div className="mapping-grid">
+                {IMPORT_FIELDS.map((field) => (
+                  <label key={field.key}>
+                    {field.label}{field.required ? ' *' : ''}
+                    <select
+                      value={importMapping[field.key] ?? ''}
+                      onChange={(event) =>
+                        setImportMapping((current) => ({
+                          ...current,
+                          [field.key]: event.target.value || null,
+                        }))
+                      }
+                      disabled={!importPreview || busy}
+                    >
+                      <option value="">Nao usar</option>
+                      {importPreview?.columns.map((column) => (
+                        <option key={column} value={column}>{column}</option>
+                      ))}
+                    </select>
+                  </label>
+                ))}
+              </div>
+              <button type="submit" disabled={!importFile || busy}>
+                <Upload size={16} /> Importar para o banco
+              </button>
+            </form>
+
+            <section className="data-preview glass-panel">
+              <div className="panel-title">
+                <h2>Previa</h2>
+                <span>{importPreview?.sampleRows.length ?? 0} linhas</span>
+              </div>
+              {importPreview ? (
+                <div className="preview-table">
+                  <div
+                    className="preview-head"
+                    style={{ gridTemplateColumns: `repeat(${Math.max(1, Math.min(importPreview.columns.length, 5))}, minmax(120px, 1fr))` }}
+                  >
+                    {importPreview.columns.slice(0, 5).map((column) => <span key={column}>{column}</span>)}
+                  </div>
+                  {importPreview.sampleRows.map((row, index) => (
+                    <article
+                      key={`${index}-${row[importPreview.columns[0]] ?? 'linha'}`}
+                      style={{ gridTemplateColumns: `repeat(${Math.max(1, Math.min(importPreview.columns.length, 5))}, minmax(120px, 1fr))` }}
+                    >
+                      {importPreview.columns.slice(0, 5).map((column) => <span key={column}>{row[column]}</span>)}
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <article className="empty-row">
+                  <strong>Nenhum arquivo selecionado</strong>
+                  <small>Use CSV, XLS ou XLSX. O sistema tenta detectar data, descricao e valor automaticamente.</small>
+                </article>
+              )}
+            </section>
+
+            <section className="data-rules glass-panel">
+              <div className="panel-title">
+                <h2>Padrao esperado</h2>
+                <Database size={17} />
+              </div>
+              <div className="data-checklist">
+                <article>
+                  <strong>Obrigatorio</strong>
+                  <span>Data, descricao e valor.</span>
+                </article>
+                <article>
+                  <strong>Opcional</strong>
+                  <span>Banco, tipo, forma de pagamento, categoria e observacao.</span>
+                </article>
+                <article>
+                  <strong>Privado</strong>
+                  <span>O extrato nao vai para IA. Python importa, valida e calcula.</span>
+                </article>
               </div>
             </section>
           </main>

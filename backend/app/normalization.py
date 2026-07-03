@@ -44,6 +44,10 @@ def parse_amount(value: str | float | int) -> float:
         clean = clean.replace(".", "").replace(",", ".")
     elif "," in clean:
         clean = clean.replace(",", ".")
+    elif "." in clean:
+        parts = clean.split(".")
+        if len(parts) > 1 and len(parts[-1]) == 3 and all(part.isdigit() for part in parts):
+            clean = "".join(parts)
 
     amount = float(clean)
     return -amount if negative else amount

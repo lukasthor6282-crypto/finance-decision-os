@@ -172,3 +172,29 @@ export type AgentReply = {
   intent?: string
   data?: unknown
 }
+
+export type ImportMapping = {
+  date?: string | null
+  description?: string | null
+  amount?: string | null
+  account?: string | null
+  transaction_type?: string | null
+  payment_method?: string | null
+  category?: string | null
+  notes?: string | null
+}
+
+export type ImportPreview = {
+  columns: string[]
+  detectedMapping: ImportMapping
+  sampleRows: Record<string, string>[]
+}
+
+export type ImportResult = {
+  imported: number
+  duplicated: number
+  skipped: number
+  columns?: string[]
+  mapping?: ImportMapping
+  errors?: string[]
+}

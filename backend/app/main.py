@@ -8,7 +8,7 @@ import secrets
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, File, HTTPException, Query, Request, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -16,6 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from .agent import answer
 from .analytics import get_transactions, scenario, summarize
 from .db import connect, init_db, is_postgres
+from .importers import ImportValidationError, parse_statement_file, preview_statement_file
 from .normalization import parse_amount, parse_date
 from .repository import (
     create_category_rule,
@@ -319,8 +320,70 @@ def api_work_sessions(limit: int = Query(100, ge=1, le=500)) -> list[dict]:
         return list_work_sessions(conn, limit)
 
 
+@app.post("/api/import/preview")
+async def api_import_preview(file: UploadFile = File(...)) -> dict:
+    content = await file.read()
+    try:
+        preview = preview_statement_file(file.filename or "extrato.csv", content)
+    except ImportValidationError as exc:
+        raise HTTPException(400, {"message": str(exc), "columns": exc.columns, "mapping": exc.mapping}) from exc
+    return {
+        "columns": preview.columns,
+        "detectedMapping": preview.detected_mapping,
+        "sampleRows": preview.sample_rows,
+    }
+
+
 @app.post("/api/import")
-async def api_import(file: UploadFile = File(...)) -> dict:
+async def api_import(
+    file: UploadFile = File(...),
+    date_column: str | None = Form(None),
+    description_column: str | None = Form(None),
+    amount_column: str | None = Form(None),
+    account_column: str | None = Form(None),
+    transaction_type_column: str | None = Form(None),
+    payment_method_column: str | None = Form(None),
+    category_column: str | None = Form(None),
+    notes_column: str | None = Form(None),
+) -> dict:
+    content = await file.read()
+    manual_mapping = {
+        "date": date_column,
+        "description": description_column,
+        "amount": amount_column,
+        "account": account_column,
+        "transaction_type": transaction_type_column,
+        "payment_method": payment_method_column,
+        "category": category_column,
+        "notes": notes_column,
+    }
+    try:
+        parsed = parse_statement_file(file.filename or "extrato.csv", content, manual_mapping)
+    except ImportValidationError as exc:
+        raise HTTPException(400, {"message": str(exc), "columns": exc.columns, "mapping": exc.mapping}) from exc
+
+    imported = 0
+    duplicated = 0
+    skipped = len(parsed.errors)
+    with connect() as conn:
+        for tx in parsed.transactions:
+            result = insert_transaction(conn, tx, source="csv")
+            if result.duplicated:
+                duplicated += 1
+            else:
+                imported += 1
+    return {
+        "imported": imported,
+        "duplicated": duplicated,
+        "skipped": skipped,
+        "columns": parsed.columns,
+        "mapping": parsed.mapping,
+        "errors": parsed.errors[:20],
+    }
+
+
+@app.post("/api/import-legacy")
+async def api_import_legacy(file: UploadFile = File(...)) -> dict:
     content = await file.read()
     try:
         text = content.decode("utf-8-sig")
