@@ -1,29 +1,35 @@
 :root {
-  --bg: oklch(0.13 0.018 238);
-  --surface: oklch(1 0 0 / 0.065);
-  --heading: oklch(0.97 0.006 220);
-  --text: oklch(0.9 0.01 220);
-  --muted: oklch(0.78 0.014 220);
-  --accent: oklch(0.75 0.13 145);
-  --accent-ink: oklch(0.82 0.13 145);
-  --accent-mint: oklch(0.77 0.13 145);
-  --accent-amber: oklch(0.82 0.13 82);
-  --accent-coral: oklch(0.73 0.16 28);
-  --accent-violet: oklch(0.72 0.1 282);
-  --glass-bg: oklch(0.95 0.012 220 / 0.052);
-  --glass-border: oklch(1 0 0 / 0.28);
-  --glass-edge: oklch(1 0 0 / 0.46);
-  --glass-hairline: oklch(1 0 0 / 0.12);
-  --danger: oklch(0.72 0.16 32);
+  --bg: #f4f6f8;
+  --surface: #fbfcfd;
+  --surface-raised: #ffffff;
+  --surface-muted: #eef2f5;
+  --surface-pressed: #e8edf2;
+  --border: #d9dee5;
+  --border-strong: #c4ccd5;
+  --heading: #0e1721;
+  --text: #27313d;
+  --muted: #657180;
+  --muted-strong: #4b5867;
+  --accent: #116a55;
+  --accent-strong: #0b5141;
+  --accent-soft: #e3f2ec;
+  --danger: #b42318;
+  --danger-soft: #fce7e4;
+  --warning: #9a5b05;
+  --warning-soft: #fff2cc;
+  --income: #0f7a5f;
+  --expense: #b42318;
+  --shadow-sm: 0 1px 2px rgb(16 24 40 / 0.06);
+  --shadow-md: 0 14px 34px rgb(16 24 40 / 0.08);
+  --radius: 8px;
+  --radius-sm: 6px;
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
-  --ease-soft: cubic-bezier(0.2, 0, 0, 1);
-  --display: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --ui: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --ui: Aptos, "Segoe UI", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   --numbers: "SF Mono", "Roboto Mono", ui-monospace, Consolas, monospace;
   color: var(--text);
   background: var(--bg);
-  color-scheme: dark;
+  color-scheme: light;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -39,61 +45,18 @@ html,
   min-height: 100%;
 }
 
-html {
-  scroll-behavior: smooth;
-}
-
 body {
-  position: relative;
   margin: 0;
   min-width: 320px;
-  min-height: 100svh;
+  min-height: 100dvh;
   overflow-x: hidden;
-  overflow-y: auto;
   color: var(--text);
-  background:
-    radial-gradient(circle at 6% 9%, oklch(0.94 0.04 76 / 0.62), transparent 3%),
-    radial-gradient(circle at 72% 32%, oklch(0.82 0.08 150 / 0.2), transparent 18%),
-    radial-gradient(circle at 14% 84%, oklch(0.68 0.02 230 / 0.24), transparent 20%),
-    linear-gradient(118deg, oklch(0.1 0.012 238), oklch(0.21 0.026 228) 48%, oklch(0.13 0.022 170));
+  background: var(--bg);
   font-family: var(--ui);
   letter-spacing: 0;
 }
 
-body::before,
-body::after {
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: -2;
-  pointer-events: none;
-}
-
-body::before {
-  background:
-    linear-gradient(90deg, oklch(0.04 0.012 240 / 0.82), transparent 34%, oklch(0.04 0.014 150 / 0.5)),
-    radial-gradient(ellipse at 84% 40%, oklch(0.58 0.12 142 / 0.28), transparent 24%),
-    radial-gradient(ellipse at 92% 62%, oklch(0.42 0.12 145 / 0.3), transparent 19%),
-    linear-gradient(100deg, transparent 0 68%, oklch(0.44 0.1 145 / 0.22) 69% 72%, transparent 73%),
-    linear-gradient(76deg, transparent 0 77%, oklch(0.56 0.11 145 / 0.22) 78% 80%, transparent 81%),
-    linear-gradient(112deg, transparent 0 82%, oklch(0.5 0.1 145 / 0.18) 83% 85%, transparent 86%),
-    radial-gradient(ellipse at 22% 58%, oklch(0.56 0.018 235 / 0.38), transparent 24%),
-    radial-gradient(ellipse at 8% 78%, oklch(0.52 0.018 45 / 0.24), transparent 28%);
-  filter: blur(18px) saturate(115%);
-  transform: scale(1.05);
-}
-
-body::after {
-  z-index: -1;
-  background:
-    linear-gradient(180deg, oklch(0 0 0 / 0.18), transparent 26%, oklch(0 0 0 / 0.24)),
-    radial-gradient(circle at 52% 12%, oklch(1 0 0 / 0.11), transparent 26%),
-    linear-gradient(90deg, oklch(1 0 0 / 0.05), transparent 19%, transparent 81%, oklch(1 0 0 / 0.05));
-  backdrop-filter: blur(2px);
-  -webkit-backdrop-filter: blur(2px);
-}
-
 ::selection {
-  color: oklch(0.11 0.014 235);
+  color: #ffffff;
   background: var(--accent);
 }

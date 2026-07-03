@@ -533,6 +533,7 @@ function App() {
       <aside className="side-rail glass-sheet" aria-label="Navegacao">
         <a className="app-mark" href="#inicio" aria-label="Finance OS">
           <WalletCards size={20} />
+          <span>Finance OS</span>
         </a>
         <nav>
           {navItems.map((item) => (
@@ -627,15 +628,15 @@ function App() {
                 {commitments.map((item) => (
                   <article key={item.id}>
                     <div>
-                      <span>{item.kind === 'income' ? 'receita fixa' : 'despesa fixa'} · {item.category}</span>
+                      <span>{item.kind === 'income' ? 'receita fixa' : 'despesa fixa'} - {item.category}</span>
                       <strong>{item.description}</strong>
                       <p>
                         {item.installments_remaining
-                          ? `${item.installments_remaining} parcelas restantes · total ${money(item.amount * item.installments_remaining)}`
+                          ? `${item.installments_remaining} parcelas restantes - total ${money(item.amount * item.installments_remaining)}`
                           : item.frequency === 'monthly'
                             ? 'mensal'
                             : item.frequency}
-                        {item.due_day ? ` · vence dia ${item.due_day}` : ''}
+                        {item.due_day ? ` - vence dia ${item.due_day}` : ''}
                       </p>
                     </div>
                     <b className={item.kind === 'income' ? 'income' : 'expense'}>{money(item.amount)}</b>
@@ -740,7 +741,7 @@ function App() {
                         ))}
                       </select>
                     </label>
-                    <small>{transaction.category_locked ? 'manual' : 'auto'} · {money(transaction.amount)}</small>
+                    <small>{transaction.category_locked ? 'manual' : 'auto'} - {money(transaction.amount)}</small>
                   </article>
                 ))}
                 {!transactions.length && (
@@ -815,7 +816,7 @@ function App() {
                 {categoryRules.map((rule) => (
                   <article key={`${rule.source}-${rule.id ?? rule.category}`}>
                     <div>
-                      <span>{rule.source === 'custom' ? 'pessoal' : 'sistema'} · {rule.transaction_type}</span>
+                      <span>{rule.source === 'custom' ? 'pessoal' : 'sistema'} - {rule.transaction_type}</span>
                       <strong>{rule.category}</strong>
                       <p>{rule.patterns.slice(0, 5).join(', ')}</p>
                     </div>
@@ -1081,7 +1082,7 @@ function App() {
             <div className="assistant-head">
               <span className="agent-avatar"><Bot size={22} /></span>
               <div>
-                <h1>Bom dia, Lukas.</h1>
+                <h1>Painel financeiro</h1>
                 <p>
                   {error
                     ? 'Backend indisponivel. Verifique Render e variaveis.'
@@ -1213,7 +1214,7 @@ function App() {
             <div className="ledger-list" aria-label="Lancamentos recentes">
               {(summary?.recentTransactions.slice(0, 5) ?? []).map((transaction) => (
                 <article key={transaction.id}>
-                  <span>{transaction.date.slice(5)} · {transaction.category}</span>
+                  <span>{transaction.date.slice(5)} - {transaction.category}</span>
                   <strong>{transaction.description}</strong>
                   <b className={transaction.amount >= 0 ? 'income' : 'expense'}>
                     {money(transaction.amount)}
