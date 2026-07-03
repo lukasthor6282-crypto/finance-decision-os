@@ -1,18 +1,23 @@
 from __future__ import annotations
 
+import json
 import re
 import unicodedata
 from dataclasses import dataclass
 from sqlite3 import Connection
 
 from .analytics import money, summarize
-from .repository import list_commitments
+from .repository import get_fact, list_commitments, set_fact
+
+
+CONTEXT_KEY = "strategic_plan_context"
 
 
 @dataclass(frozen=True)
 class StrategicPlanInput:
     goal_name: str | None
     monthly_income: float | None
+    monthly_expenses: float | None
     target_amount: float | None
     current_age: int | None
     target_age: int | None
@@ -32,8 +37,38 @@ def asks_strategic_plan(message: str) -> bool:
     return any(term in text for term in goal_terms) and any(term in text for term in future_terms)
 
 
+def continues_strategic_plan(conn: Connection, message: str) -> bool:
+    if not load_plan_context(conn):
+        return False
+    text = soft_normalize(message)
+    if asks_strategic_plan(message):
+        return True
+    cues = [
+        "ate la",
+        "pra meta",
+        "para meta",
+        "idade",
+        "anos",
+        "meses",
+        "preco",
+        "valor",
+        "entrada",
+        "custa",
+        "custando",
+        "gasto mensal",
+        "despesa mensal",
+        "custo mensal",
+        "por mes",
+        "ao mes",
+        "mensal",
+        "minhas despesas",
+        "meus gastos",
+    ]
+    return any(cue in text for cue in cues) and bool(re.search(r"\d", text))
+
+
 def answer_strategic_plan(conn: Connection, message: str) -> dict:
-    parsed = parse_strategic_plan(message)
+    parsed = merge_with_context(load_plan_context(conn), parse_strategic_plan(message))
     summary = summarize(conn)
     kpis = summary["kpis"]
     commitments = list_commitments(conn)
@@ -41,7 +76,7 @@ def answer_strategic_plan(conn: Connection, message: str) -> dict:
     fixed_income = sum(float(item["amount"]) for item in commitments if item["kind"] == "income")
 
     monthly_income = parsed.monthly_income or positive(kpis["income"]) or positive(fixed_income)
-    monthly_expenses = max(float(kpis["expenses"] or 0), fixed_expenses)
+    monthly_expenses = parsed.monthly_expenses if parsed.monthly_expenses is not None else max(float(kpis["expenses"] or 0), fixed_expenses)
     current_savings = max(float(kpis["balance"] or 0), 0)
 
     target_amount = parsed.target_amount
@@ -62,6 +97,7 @@ def answer_strategic_plan(conn: Connection, message: str) -> dict:
     if monthly_expenses <= 0 and "gasto mensal medio" not in missing:
         missing.append("gasto mensal medio")
     answer = build_answer(parsed, monthly_income, monthly_expenses, current_savings, monthly_required, required_rate, available_now, gap, missing)
+    save_plan_context(conn, parsed)
 
     return {
         "answer": answer,
@@ -97,11 +133,57 @@ def parse_strategic_plan(message: str) -> StrategicPlanInput:
     return StrategicPlanInput(
         goal_name=extract_goal_name(text),
         monthly_income=extract_monthly_income(text),
+        monthly_expenses=extract_monthly_expenses(text),
         target_amount=extract_target_amount(text),
         current_age=current_age,
         target_age=target_age,
         months_left=months_left,
         growth_rate_annual=extract_growth_rate(text),
+    )
+
+
+def merge_with_context(base: StrategicPlanInput | None, fresh: StrategicPlanInput) -> StrategicPlanInput:
+    if base is None:
+        return complete_derived_fields(fresh)
+
+    if fresh.goal_name and base.goal_name and soft_normalize(fresh.goal_name) != soft_normalize(base.goal_name):
+        base = StrategicPlanInput(
+            goal_name=None,
+            monthly_income=base.monthly_income,
+            monthly_expenses=base.monthly_expenses,
+            target_amount=None,
+            current_age=base.current_age,
+            target_age=None,
+            months_left=None,
+            growth_rate_annual=base.growth_rate_annual,
+        )
+
+    merged = StrategicPlanInput(
+        goal_name=fresh.goal_name or base.goal_name,
+        monthly_income=fresh.monthly_income if fresh.monthly_income is not None else base.monthly_income,
+        monthly_expenses=fresh.monthly_expenses if fresh.monthly_expenses is not None else base.monthly_expenses,
+        target_amount=fresh.target_amount if fresh.target_amount is not None else base.target_amount,
+        current_age=fresh.current_age if fresh.current_age is not None else base.current_age,
+        target_age=fresh.target_age if fresh.target_age is not None else base.target_age,
+        months_left=fresh.months_left if fresh.months_left is not None else base.months_left,
+        growth_rate_annual=fresh.growth_rate_annual if fresh.growth_rate_annual is not None else base.growth_rate_annual,
+    )
+    return complete_derived_fields(merged)
+
+
+def complete_derived_fields(plan: StrategicPlanInput) -> StrategicPlanInput:
+    months_left = plan.months_left
+    if months_left is None and plan.current_age is not None and plan.target_age is not None and plan.target_age > plan.current_age:
+        months_left = (plan.target_age - plan.current_age) * 12
+    return StrategicPlanInput(
+        goal_name=plan.goal_name,
+        monthly_income=plan.monthly_income,
+        monthly_expenses=plan.monthly_expenses,
+        target_amount=plan.target_amount,
+        current_age=plan.current_age,
+        target_age=plan.target_age,
+        months_left=months_left,
+        growth_rate_annual=plan.growth_rate_annual,
     )
 
 
@@ -220,6 +302,42 @@ def missing_inputs(parsed: StrategicPlanInput) -> list[str]:
     return missing
 
 
+def save_plan_context(conn: Connection, plan: StrategicPlanInput) -> None:
+    payload = {
+        "goal_name": plan.goal_name,
+        "monthly_income": plan.monthly_income,
+        "monthly_expenses": plan.monthly_expenses,
+        "target_amount": plan.target_amount,
+        "current_age": plan.current_age,
+        "target_age": plan.target_age,
+        "months_left": plan.months_left,
+        "growth_rate_annual": plan.growth_rate_annual,
+    }
+    set_fact(conn, CONTEXT_KEY, json.dumps(payload), "json", 0.95)
+
+
+def load_plan_context(conn: Connection) -> StrategicPlanInput | None:
+    raw = get_fact(conn, CONTEXT_KEY)
+    if not raw:
+        return None
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError:
+        return None
+    return complete_derived_fields(
+        StrategicPlanInput(
+            goal_name=payload.get("goal_name"),
+            monthly_income=payload.get("monthly_income"),
+            monthly_expenses=payload.get("monthly_expenses"),
+            target_amount=payload.get("target_amount"),
+            current_age=payload.get("current_age"),
+            target_age=payload.get("target_age"),
+            months_left=payload.get("months_left"),
+            growth_rate_annual=payload.get("growth_rate_annual"),
+        )
+    )
+
+
 def next_step_text(missing: list[str]) -> str:
     if not missing:
         return "qualquer mudanca de renda ou gasto"
@@ -272,9 +390,23 @@ def extract_monthly_income(text: str) -> float | None:
     return None
 
 
+def extract_monthly_expenses(text: str) -> float | None:
+    patterns = [
+        rf"\b(?:gasto|gastos|despesa|despesas|custo|custos)(?:\s+(?:mensal|medio|media|fixo|fixos))*\s*(?:de|sao|e|eh)?\s*({AMOUNT_RE})(?:\s*(mil))?\s*(?:por mes|ao mes|mensal|mes)?",
+        rf"\b({AMOUNT_RE})(?:\s*(mil))?\s*(?:de)?\s*(?:gasto|gastos|despesa|despesas|custo|custos)\s*(?:por mes|ao mes|mensal)?\b",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, text)
+        if match:
+            amount = parse_amount(match.group(1), suffix=match.group(2) if len(match.groups()) > 1 else None)
+            if amount and amount >= 50:
+                return amount
+    return None
+
+
 def extract_target_amount(text: str) -> float | None:
     patterns = [
-        rf"\b(?:meta|objetivo|preco|valor|custa|custando|entrada)\s*(?:de|por|alvo)?\s*({AMOUNT_RE})(?:\s*(mil))?",
+        rf"\b(?:meta|objetivo|preco|valor|custa|custando|entrada)\s*(?:de|por|alvo|e|eh)?\s*(?:de|por|alvo|e|eh)?\s*({AMOUNT_RE})(?:\s*(mil))?",
         rf"\bcomprar\s+.+?\s+(?:de|por|custando)\s*({AMOUNT_RE})(?:\s*(mil))?",
     ]
     for pattern in patterns:
@@ -288,8 +420,12 @@ def extract_target_amount(text: str) -> float | None:
 
 
 def extract_current_age(text: str) -> int | None:
-    match = re.search(r"\b(?:tenho|idade atual|estou com)\s+(\d{1,2})\s*(?:anos)?\b", text)
-    return int(match.group(1)) if match else None
+    for match in re.finditer(r"\b(?:tenho|idade atual|estou com)\s+(\d{1,2})\s*(?:anos)?\b", text):
+        tail = text[match.end() : match.end() + 14].strip()
+        if re.match(r"^(?:ate|pra|para)\b", tail):
+            continue
+        return int(match.group(1))
+    return None
 
 
 def extract_target_age(text: str) -> int | None:
@@ -298,6 +434,12 @@ def extract_target_age(text: str) -> int | None:
 
 
 def extract_months_left(text: str, current_age: int | None, target_age: int | None) -> int | None:
+    relative = re.search(r"\b(?:faltam|tenho|tem)\s+(\d{1,2})\s*(anos|ano|meses|mes)\s+(?:ate|pra|para)\b", text)
+    if relative:
+        value = int(relative.group(1))
+        unit = relative.group(2)
+        return value * 12 if unit.startswith("ano") else value
+
     match = re.search(r"\b(?:em|daqui a|daqui)\s+(\d{1,2})\s*(anos|ano|meses|mes)\b", text)
     if match:
         value = int(match.group(1))

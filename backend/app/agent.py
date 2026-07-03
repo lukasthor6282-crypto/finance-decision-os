@@ -18,6 +18,7 @@ from .repository import (
     set_fact,
     update_work_session,
 )
+from .strategic_planner import answer_strategic_plan, continues_strategic_plan
 from .worktime import ParsedWorkSession, is_work_correction_message, parse_hourly_rate, parse_work_session_message
 
 
@@ -55,6 +56,9 @@ def answer(conn: Connection, message: str) -> dict:
     commitment = parse_commitment_message(message)
     if commitment:
         return record_commitment_from_chat(conn, commitment)
+
+    if continues_strategic_plan(conn, message):
+        return answer_strategic_plan(conn, message)
 
     parsed = parse_transaction_message(message)
     if parsed:

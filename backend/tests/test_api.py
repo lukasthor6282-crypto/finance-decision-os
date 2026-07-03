@@ -444,6 +444,54 @@ def test_agent_builds_strategic_plan_without_inventing_target_price(tmp_path, mo
     assert "Nao vou inventar" in body["answer"]
 
 
+def test_agent_continues_strategic_plan_conversation(tmp_path, monkeypatch):
+    client = make_empty_client(tmp_path, monkeypatch)
+
+    first = client.post(
+        "/api/agent/chat",
+        json={
+            "message": "ganho em media 1200 por mes, antes dos 22 eu quero comprar um byd king, qual o melhor plano para mim?"
+        },
+    )
+    second = client.post(
+        "/api/agent/chat",
+        json={"message": "tenho 17 anos, tenho 5 anos ate la"},
+    )
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    body = second.json()
+    assert body["intent"] == "strategic_plan"
+    assert body["data"]["goalName"] == "BYD King"
+    assert body["data"]["monthlyIncome"] == 1200
+    assert body["data"]["currentAge"] == 17
+    assert body["data"]["targetAge"] == 22
+    assert body["data"]["monthsLeft"] == 60
+    assert body["intent"] != "overview"
+
+
+def test_agent_continues_strategic_plan_with_price_and_expenses(tmp_path, monkeypatch):
+    client = make_empty_client(tmp_path, monkeypatch)
+
+    client.post(
+        "/api/agent/chat",
+        json={"message": "ganho 1200 por mes e quero comprar um byd king antes dos 22"},
+    )
+    client.post("/api/agent/chat", json={"message": "tenho 17 anos"})
+    response = client.post(
+        "/api/agent/chat",
+        json={"message": "o preco alvo e R$ 180.000 e meu gasto mensal medio e R$ 700"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["intent"] == "strategic_plan"
+    assert body["data"]["targetAmount"] == 180000
+    assert body["data"]["monthlyExpenses"] == 700
+    assert body["data"]["monthlyRequired"] == 3000
+    assert body["data"]["monthlyGap"] == 2500
+
+
 def test_agent_builds_strategic_plan_with_required_monthly_amount(tmp_path, monkeypatch):
     client = make_empty_client(tmp_path, monkeypatch)
 
