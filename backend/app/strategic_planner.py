@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from sqlite3 import Connection
 
 from .analytics import money, summarize
-from .repository import get_fact, list_commitments, set_fact
+from .repository import get_fact, get_float_fact, list_commitments, set_fact
 
 
 CONTEXT_KEY = "strategic_plan_context"
@@ -69,6 +69,7 @@ def continues_strategic_plan(conn: Connection, message: str) -> bool:
 
 def answer_strategic_plan(conn: Connection, message: str) -> dict:
     parsed = merge_with_context(load_plan_context(conn), parse_strategic_plan(message))
+    parsed = apply_profile_facts(conn, parsed)
     summary = summarize(conn)
     kpis = summary["kpis"]
     commitments = list_commitments(conn)
@@ -123,6 +124,31 @@ def answer_strategic_plan(conn: Connection, message: str) -> dict:
             "scenarios": scenarios,
         },
     }
+
+
+def apply_profile_facts(conn: Connection, parsed: StrategicPlanInput) -> StrategicPlanInput:
+    current_age = parsed.current_age
+    income = parsed.monthly_income
+    expenses = parsed.monthly_expenses
+    if current_age is None:
+        age = get_float_fact(conn, "profile:current_age")
+        current_age = int(age) if age is not None else None
+    if income is None:
+        income = get_float_fact(conn, "profile:monthly_income")
+    if expenses is None:
+        expenses = get_float_fact(conn, "profile:monthly_expenses")
+    return complete_derived_fields(
+        StrategicPlanInput(
+            goal_name=parsed.goal_name,
+            monthly_income=income,
+            monthly_expenses=expenses,
+            target_amount=parsed.target_amount,
+            current_age=current_age,
+            target_age=parsed.target_age,
+            months_left=parsed.months_left,
+            growth_rate_annual=parsed.growth_rate_annual,
+        )
+    )
 
 
 def parse_strategic_plan(message: str) -> StrategicPlanInput:

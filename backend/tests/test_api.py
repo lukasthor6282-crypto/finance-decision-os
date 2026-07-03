@@ -618,6 +618,62 @@ def test_assistant_layer_reports_real_free_and_projected_balance(tmp_path, monke
     assert body["data"]["saldo_livre"] == 1000
 
 
+def test_agent_learns_profile_facts_and_uses_them_in_goal_plan(tmp_path, monkeypatch):
+    client = make_empty_client(tmp_path, monkeypatch)
+
+    learned = client.post(
+        "/api/agent/chat",
+        json={"message": "lembre que minha renda media e R$ 1200 por mes e tenho 17 anos"},
+    )
+    plan = client.post(
+        "/api/agent/chat",
+        json={"message": "quero comprar uma moto por R$ 12000 antes dos 22, qual plano?"},
+    )
+
+    assert learned.status_code == 200
+    assert learned.json()["intent"] == "train_assistant"
+    facts = client.get("/api/facts").json()
+    assert any(item["key"] == "profile:monthly_income" and item["value"] == "1200.00" for item in facts)
+    assert any(item["key"] == "profile:current_age" and item["value"] == "17" for item in facts)
+
+    body = plan.json()
+    assert body["intent"] == "strategic_plan"
+    assert body["data"]["monthlyIncome"] == 1200
+    assert body["data"]["currentAge"] == 17
+    assert body["data"]["monthsLeft"] == 60
+    assert body["data"]["monthlyRequired"] == 200
+
+
+def test_agent_learns_category_rule_from_chat(tmp_path, monkeypatch):
+    client = make_empty_client(tmp_path, monkeypatch)
+
+    learned = client.post(
+        "/api/agent/chat",
+        json={"message": "aprenda quando aparecer academia premium categoria Saude"},
+    )
+    tx = client.post(
+        "/api/transactions",
+        json={"date": "2026-07-01", "description": "academia premium mensal", "amount": -99},
+    )
+
+    assert learned.status_code == 200
+    assert learned.json()["intent"] == "train_assistant"
+    assert learned.json()["data"]["trainingType"] == "category_rule"
+    assert tx.json()["category"] == "Saude"
+
+
+def test_agent_answers_what_it_knows_about_user(tmp_path, monkeypatch):
+    client = make_empty_client(tmp_path, monkeypatch)
+    client.post("/api/agent/chat", json={"message": "lembre que minha renda media e R$ 1200 por mes"})
+
+    response = client.post("/api/agent/chat", json={"message": "o que voce sabe sobre mim?"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["intent"] == "memory_profile"
+    assert any(item["key"] == "profile:monthly_income" for item in body["data"]["facts"])
+
+
 def test_goals_crud(tmp_path, monkeypatch):
     client = make_client(tmp_path, monkeypatch)
 

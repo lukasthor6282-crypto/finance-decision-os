@@ -8,7 +8,7 @@ from sqlite3 import Connection
 from .analytics import money, previous_month_key, summarize
 from .classifier import classify
 from .normalization import parse_amount
-from .repository import list_commitments
+from .repository import get_float_fact, list_commitments
 
 
 def handle_financial_assistant_layer(conn: Connection, message: str) -> dict | None:
@@ -154,6 +154,7 @@ def financial_position(conn: Connection, month_key: str | None = None) -> dict:
     summary = summarize(conn, month_key)
     kpis = summary["kpis"]
     commitments = list_commitments(conn)
+    profile_income = get_float_fact(conn, "profile:monthly_income")
     expense_commitments = [item for item in commitments if item["kind"] == "expense" and item["active"]]
     income_commitments = [item for item in commitments if item["kind"] == "income" and item["active"]]
     monthly_commitments = round(sum(float(item["amount"]) for item in expense_commitments), 2)
@@ -164,7 +165,7 @@ def financial_position(conn: Connection, month_key: str | None = None) -> dict:
     )
     goals = summary.get("goals", [])
     goal_monthly = round(sum(float(goal.get("monthlyRequired") or 0) for goal in goals), 2)
-    income_base = float(kpis["income"] or fixed_income or 0)
+    income_base = float(kpis["income"] or fixed_income or profile_income or 0)
     real_balance = float(kpis["balance"])
     projected = float(kpis["projectedBalance"]) + fixed_income - monthly_commitments - goal_monthly
     free_balance = real_balance - monthly_commitments

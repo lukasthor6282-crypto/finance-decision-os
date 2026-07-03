@@ -6,6 +6,7 @@ from sqlite3 import Connection
 
 from .accounting import ParsedTransaction, parse_transaction_message
 from .analytics import money, scenario, summarize
+from .assistant_training import handle_training_message
 from .commitments import ParsedCommitment, parse_commitment_message
 from .financial_assistant_layer import handle_financial_assistant_layer
 from .question_router import answer_question
@@ -16,6 +17,7 @@ from .repository import (
     insert_commitment,
     insert_transaction,
     insert_work_session,
+    list_facts,
     set_fact,
     update_work_session,
 )
@@ -65,6 +67,10 @@ def answer(conn: Connection, message: str) -> dict:
     if layered:
         return layered
 
+    trained = handle_training_message(conn, message)
+    if trained:
+        return trained
+
     parsed = parse_transaction_message(message)
     if parsed:
         return record_transaction_from_chat(conn, parsed)
@@ -80,7 +86,7 @@ def answer(conn: Connection, message: str) -> dict:
 
     if os.getenv("OPENAI_API_KEY"):
         try:
-            return openai_answer(summary, message)
+            return openai_answer(conn, summary, message)
         except Exception as exc:
             local = local_answer(conn, summary, message)
             local["answer"] += f"\n\nModo local ativado: provedor IA falhou ({type(exc).__name__})."
@@ -308,10 +314,10 @@ def correct_work_session_from_chat(conn: Connection, session: ParsedWorkSession)
     )
 
 
-def openai_answer(summary: dict, message: str) -> dict:
+def openai_answer(conn: Connection, summary: dict, message: str) -> dict:
     from openai import OpenAI
 
-    context = structured_llm_context(summary)
+    context = structured_llm_context(summary, list_facts(conn))
     client = OpenAI()
     response = client.responses.create(
         model=os.getenv("OPENAI_MODEL", "gpt-4.1-mini"),
@@ -331,7 +337,7 @@ def openai_answer(summary: dict, message: str) -> dict:
     }
 
 
-def structured_llm_context(summary: dict) -> dict:
+def structured_llm_context(summary: dict, facts: list[dict] | None = None) -> dict:
     kpis = summary["kpis"]
     return {
         "periodo": summary["month"],
@@ -352,12 +358,30 @@ def structured_llm_context(summary: dict) -> dict:
         "metas": summary.get("goals", [])[:5],
         "alertas": summary.get("alerts", [])[:5],
         "acoes": summary.get("actionPlan", [])[:5],
+        "memorias_usuario": sanitize_facts(facts or []),
         "regras": {
             "calculos_feitos_por": "python",
             "extrato_bruto_enviado": False,
             "nao_inventar_valores": True,
         },
     }
+
+
+def sanitize_facts(facts: list[dict]) -> list[dict]:
+    safe = []
+    for item in facts[:40]:
+        key = item.get("key", "")
+        if key.startswith("strategic_plan_context"):
+            continue
+        safe.append(
+            {
+                "key": key,
+                "value": item.get("value"),
+                "type": item.get("value_type"),
+                "confidence": item.get("confidence"),
+            }
+        )
+    return safe
 
 
 def local_answer(conn: Connection, summary: dict, message: str) -> dict:
