@@ -1,6 +1,6 @@
 :root {
   --bg: oklch(0.13 0.018 238);
-  --surface: oklch(1 0 0 / 0.09);
+  --surface: oklch(1 0 0 / 0.065);
   --heading: oklch(0.97 0.006 220);
   --text: oklch(0.9 0.01 220);
   --muted: oklch(0.78 0.014 220);
@@ -10,9 +10,9 @@
   --accent-amber: oklch(0.82 0.13 82);
   --accent-coral: oklch(0.73 0.16 28);
   --accent-violet: oklch(0.72 0.1 282);
-  --glass-bg: oklch(0.95 0.012 220 / 0.08);
-  --glass-border: oklch(1 0 0 / 0.34);
-  --glass-edge: oklch(1 0 0 / 0.56);
+  --glass-bg: oklch(0.95 0.012 220 / 0.052);
+  --glass-border: oklch(1 0 0 / 0.28);
+  --glass-edge: oklch(1 0 0 / 0.46);
   --glass-hairline: oklch(1 0 0 / 0.12);
   --danger: oklch(0.72 0.16 32);
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
@@ -53,7 +53,7 @@ body {
   color: var(--text);
   background:
     radial-gradient(circle at 6% 9%, oklch(0.94 0.04 76 / 0.62), transparent 3%),
-    radial-gradient(circle at 74% 34%, oklch(0.82 0.08 150 / 0.28), transparent 18%),
+    radial-gradient(circle at 72% 32%, oklch(0.82 0.08 150 / 0.2), transparent 18%),
     radial-gradient(circle at 14% 84%, oklch(0.68 0.02 230 / 0.24), transparent 20%),
     linear-gradient(118deg, oklch(0.1 0.012 238), oklch(0.21 0.026 228) 48%, oklch(0.13 0.022 170));
   font-family: var(--ui);
@@ -71,7 +71,7 @@ body::after {
 
 body::before {
   background:
-    linear-gradient(90deg, oklch(0.04 0.012 240 / 0.74), transparent 34%, oklch(0.04 0.014 150 / 0.42)),
+    linear-gradient(90deg, oklch(0.04 0.012 240 / 0.82), transparent 34%, oklch(0.04 0.014 150 / 0.5)),
     radial-gradient(ellipse at 84% 40%, oklch(0.58 0.12 142 / 0.28), transparent 24%),
     radial-gradient(ellipse at 92% 62%, oklch(0.42 0.12 145 / 0.3), transparent 19%),
     linear-gradient(100deg, transparent 0 68%, oklch(0.44 0.1 145 / 0.22) 69% 72%, transparent 73%),
