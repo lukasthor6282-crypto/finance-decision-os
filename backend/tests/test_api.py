@@ -548,6 +548,76 @@ def test_agent_builds_strategic_plan_with_required_monthly_amount(tmp_path, monk
     assert body["data"]["monthlyRequired"] == 500
 
 
+def test_assistant_layer_evaluates_installment_purchase_with_free_balance(tmp_path, monkeypatch):
+    client = make_empty_client(tmp_path, monkeypatch)
+    client.post("/api/transactions", json={"date": "2026-07-01", "description": "salario recebido", "amount": 1200})
+    client.post("/api/transactions", json={"date": "2026-07-02", "description": "mercado bairro", "amount": -500})
+    client.post(
+        "/api/agent/chat",
+        json={"message": "guarde gasto fixo de R$ 300 da parcela do notebook, tenho mais 4 parcelas a pagar"},
+    )
+
+    response = client.post(
+        "/api/agent/chat",
+        json={"message": "em 2026-07 posso comprar um celular de R$ 2400 em 10x?"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["intent"] == "purchase_decision"
+    assert body["mode"] == "assistant_layer"
+    assert body["data"]["amount"] == 2400
+    assert body["data"]["installments"] == 10
+    assert body["data"]["installmentAmount"] == 240
+    assert body["data"]["freeBalance"] == 400
+    assert body["data"]["monthlyCommitments"] == 300
+    assert body["data"]["structured_intent"]["intent"] == "avaliar_compra"
+    assert body["data"]["safety"]["calculation_owner"] == "python"
+
+
+def test_assistant_layer_asks_missing_purchase_data_without_guessing(tmp_path, monkeypatch):
+    client = make_empty_client(tmp_path, monkeypatch)
+
+    response = client.post("/api/agent/chat", json={"message": "posso comprar isso?"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["intent"] == "missing_financial_data"
+    assert "valor_total" in body["data"]["safety"]["missing_fields"]
+    assert body["data"]["safety"]["raw_statement_sent_to_ai"] is False
+
+
+def test_assistant_layer_does_not_record_ambiguous_installment_purchase(tmp_path, monkeypatch):
+    client = make_empty_client(tmp_path, monkeypatch)
+
+    response = client.post("/api/agent/chat", json={"message": "comprei um celular de R$ 2400 em 10x"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["intent"] == "missing_financial_data"
+    assert body["data"]["structured_intent"]["intent"] == "confirmar_parcelamento"
+    assert body["data"]["structured_intent"]["needs_confirmation"] is True
+    assert client.get("/api/transactions").json() == []
+
+
+def test_assistant_layer_reports_real_free_and_projected_balance(tmp_path, monkeypatch):
+    client = make_empty_client(tmp_path, monkeypatch)
+    client.post("/api/transactions", json={"date": "2026-07-01", "description": "salario recebido", "amount": 1200})
+    client.post(
+        "/api/agent/chat",
+        json={"message": "guarde gasto fixo de R$ 200 da parcela do celular, tenho mais 3 parcelas a pagar"},
+    )
+
+    response = client.post("/api/agent/chat", json={"message": "qual meu saldo livre e saldo projetado em 2026-07?"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["intent"] == "balance_position"
+    assert body["data"]["saldo_real"] == 1200
+    assert body["data"]["saldo_comprometido"] == 200
+    assert body["data"]["saldo_livre"] == 1000
+
+
 def test_goals_crud(tmp_path, monkeypatch):
     client = make_client(tmp_path, monkeypatch)
 

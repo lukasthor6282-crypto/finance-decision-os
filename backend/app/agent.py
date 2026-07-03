@@ -7,6 +7,7 @@ from sqlite3 import Connection
 from .accounting import ParsedTransaction, parse_transaction_message
 from .analytics import money, scenario, summarize
 from .commitments import ParsedCommitment, parse_commitment_message
+from .financial_assistant_layer import handle_financial_assistant_layer
 from .question_router import answer_question
 from .repository import (
     existing_work_session,
@@ -18,7 +19,7 @@ from .repository import (
     set_fact,
     update_work_session,
 )
-from .strategic_planner import answer_strategic_plan, continues_strategic_plan
+from .strategic_planner import answer_strategic_plan, asks_strategic_plan, continues_strategic_plan
 from .worktime import ParsedWorkSession, is_work_correction_message, parse_hourly_rate, parse_work_session_message
 
 
@@ -57,8 +58,12 @@ def answer(conn: Connection, message: str) -> dict:
     if commitment:
         return record_commitment_from_chat(conn, commitment)
 
-    if continues_strategic_plan(conn, message):
+    if asks_strategic_plan(message) or continues_strategic_plan(conn, message):
         return answer_strategic_plan(conn, message)
+
+    layered = handle_financial_assistant_layer(conn, message)
+    if layered:
+        return layered
 
     parsed = parse_transaction_message(message)
     if parsed:
@@ -306,12 +311,13 @@ def correct_work_session_from_chat(conn: Connection, session: ParsedWorkSession)
 def openai_answer(summary: dict, message: str) -> dict:
     from openai import OpenAI
 
+    context = structured_llm_context(summary)
     client = OpenAI()
     response = client.responses.create(
         model=os.getenv("OPENAI_MODEL", "gpt-4.1-mini"),
         input=[
             {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": f"Dados financeiros JSON:\n{summary}\n\nPergunta:\n{message}"},
+            {"role": "user", "content": f"Dados financeiros estruturados JSON:\n{context}\n\nPergunta:\n{message}"},
         ],
     )
     text = getattr(response, "output_text", "").strip() or "Nao consegui gerar resposta com o provedor IA."
@@ -322,6 +328,35 @@ def openai_answer(summary: dict, message: str) -> dict:
         "mode": "openai",
         "intent": "llm",
         "data": {"summaryMonth": summary["month"], "healthScore": summary["kpis"]["healthScore"]},
+    }
+
+
+def structured_llm_context(summary: dict) -> dict:
+    kpis = summary["kpis"]
+    return {
+        "periodo": summary["month"],
+        "kpis": {
+            "saldo_real": kpis["balance"],
+            "receitas": kpis["income"],
+            "despesas": kpis["expenses"],
+            "liquido": kpis["net"],
+            "poupanca_percentual": kpis["savingsRate"],
+            "saldo_projetado": kpis["projectedBalance"],
+            "risco_caixa": kpis["cashRisk"],
+            "score_saude": kpis["healthScore"],
+            "status_saude": kpis["healthLabel"],
+        },
+        "categorias_criticas": summary.get("categorySpend", [])[:5],
+        "orcamentos": summary.get("budgetStatus", [])[:5],
+        "recorrencias": summary.get("recurring", [])[:5],
+        "metas": summary.get("goals", [])[:5],
+        "alertas": summary.get("alerts", [])[:5],
+        "acoes": summary.get("actionPlan", [])[:5],
+        "regras": {
+            "calculos_feitos_por": "python",
+            "extrato_bruto_enviado": False,
+            "nao_inventar_valores": True,
+        },
     }
 
 
