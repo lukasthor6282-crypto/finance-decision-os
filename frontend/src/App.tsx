@@ -4,25 +4,18 @@ import {
   Bell,
   Bot,
   CheckCircle2,
-  ChevronLeft,
-  ChevronRight,
   CircleDollarSign,
   Clock3,
-  Copy,
   Database,
-  Download,
   Home,
-  Lock,
   MessageCircle,
   PieChart,
-  Plus,
   RefreshCw,
   RotateCcw,
   Save,
   Search,
   Send,
   ShieldAlert,
-  Share2,
   SlidersHorizontal,
   Sparkles,
   Tags,
@@ -483,32 +476,6 @@ function App() {
 
   return (
     <div className="os-shell">
-      <header className="browser-chrome glass-sheet" aria-label="Janela Finance OS">
-        <div className="window-controls" aria-hidden="true">
-          <i />
-          <i />
-          <i />
-        </div>
-        <button type="button" aria-label="Menu da janela">
-          <WalletCards size={20} />
-        </button>
-        <div className="browser-history" aria-hidden="true">
-          <ChevronLeft size={19} />
-          <ChevronRight size={19} />
-        </div>
-        <div className="address-pill" aria-label="Endereco do aplicativo">
-          <Lock size={14} />
-          <span>financeos.app/dashboard</span>
-          <RefreshCw size={16} />
-        </div>
-        <div className="browser-actions" aria-hidden="true">
-          <Share2 size={19} />
-          <Download size={19} />
-          <Plus size={20} />
-          <Copy size={19} />
-        </div>
-      </header>
-
       <aside className="side-rail glass-sheet" aria-label="Navegacao">
         <a className="app-mark" href="#inicio" aria-label="Finance OS">
           <WalletCards size={20} />
