@@ -59,6 +59,8 @@ def answer_strategic_plan(conn: Connection, message: str) -> dict:
 
     scenarios = build_growth_scenarios(monthly_income, monthly_expenses, target_amount, current_savings, months_left)
     missing = missing_inputs(parsed)
+    if monthly_expenses <= 0 and "gasto mensal medio" not in missing:
+        missing.append("gasto mensal medio")
     answer = build_answer(parsed, monthly_income, monthly_expenses, current_savings, monthly_required, required_rate, available_now, gap, missing)
 
     return {
@@ -122,6 +124,8 @@ def build_answer(
         used.append(f"renda base {money(monthly_income)}/mes")
     if parsed.target_amount is not None:
         used.append(f"meta {money(parsed.target_amount)}")
+    if parsed.target_age is not None:
+        used.append(f"idade-alvo {parsed.target_age} anos")
     if parsed.months_left is not None:
         used.append(f"prazo aproximado {parsed.months_left} meses")
     if used:
@@ -129,6 +133,8 @@ def build_answer(
 
     if missing:
         lines.append("Conta exata ainda falta: " + ", ".join(missing) + ". Nao vou inventar esses valores.")
+    if parsed.target_age is not None and parsed.current_age is None and parsed.months_left is None:
+        lines.append(f"Entendi o alvo: antes dos {parsed.target_age}. Falta sua idade atual para converter isso em meses.")
 
     if monthly_required is not None:
         rate_text = f" ({required_rate:.1f}% da renda)" if required_rate is not None else ""
@@ -143,7 +149,7 @@ def build_answer(
         [
             "Plano: 1) fechar custo real mensal por 30 dias; 2) guardar primeiro reserva de 1 a 3 meses de gastos; 3) separar fundo da meta em conta aparte; 4) subir renda antes de assumir parcela grande; 5) comprar so quando parcela + seguro + uso nao travar o caixa.",
             "Regra de decisao: se aporte da meta passar de 30% da renda, plano depende mais de aumentar renda do que cortar gasto pequeno.",
-            "Proximo passo: mande idade atual, preco alvo/entrada e gasto mensal medio. Eu recalculo com numeros fechados.",
+            f"Proximo passo: mande {next_step_text(missing)}. Eu recalculo com numeros fechados.",
         ]
     )
     return " ".join(lines)
@@ -153,8 +159,12 @@ def build_actions(parsed: StrategicPlanInput, missing: list[str]) -> list[str]:
     actions = []
     if "preco alvo ou entrada desejada" in missing:
         actions.append("Informar preco alvo ou entrada desejada.")
-    if "idade atual ou prazo em meses/anos" in missing:
-        actions.append("Informar idade atual ou prazo real.")
+    if "idade atual" in missing:
+        actions.append("Informar idade atual.")
+    if "prazo ou idade-alvo" in missing:
+        actions.append("Informar prazo real ou idade-alvo.")
+    if "gasto mensal medio" in missing:
+        actions.append("Informar gasto mensal medio.")
     actions.extend(
         [
             "Registrar despesas fixas e variaveis por 30 dias.",
@@ -203,8 +213,25 @@ def missing_inputs(parsed: StrategicPlanInput) -> list[str]:
     if parsed.target_amount is None:
         missing.append("preco alvo ou entrada desejada")
     if parsed.months_left is None:
-        missing.append("idade atual ou prazo em meses/anos")
+        if parsed.target_age is not None and parsed.current_age is None:
+            missing.append("idade atual")
+        else:
+            missing.append("prazo ou idade-alvo")
     return missing
+
+
+def next_step_text(missing: list[str]) -> str:
+    if not missing:
+        return "qualquer mudanca de renda ou gasto"
+    readable = {
+        "renda mensal": "renda mensal",
+        "preco alvo ou entrada desejada": "preco alvo ou entrada desejada",
+        "idade atual": "idade atual",
+        "prazo ou idade-alvo": "prazo real ou idade-alvo",
+        "gasto mensal medio": "gasto mensal medio",
+    }
+    items = [readable.get(item, item) for item in missing]
+    return ", ".join(items)
 
 
 def extract_goal_name(text: str) -> str | None:

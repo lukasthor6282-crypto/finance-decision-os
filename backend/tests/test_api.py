@@ -437,6 +437,10 @@ def test_agent_builds_strategic_plan_without_inventing_target_price(tmp_path, mo
     assert body["data"]["targetAge"] == 22
     assert body["data"]["targetAmount"] is None
     assert "preco alvo ou entrada desejada" in body["data"]["missing"]
+    assert "idade atual" in body["data"]["missing"]
+    assert "prazo ou idade-alvo" not in body["data"]["missing"]
+    assert "idade-alvo 22 anos" in body["answer"]
+    assert "Falta sua idade atual" in body["answer"]
     assert "Nao vou inventar" in body["answer"]
 
 
