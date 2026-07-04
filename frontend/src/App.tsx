@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { FormEvent, ReactNode } from 'react'
+import type { FormEvent, ReactNode, RefObject } from 'react'
 import {
   ArrowDownRight,
   ArrowUpRight,
@@ -33,6 +33,8 @@ type MetricItem = {
   icon: ReactNode
   tone: MetricTone
 }
+
+type RailSection = 'daily' | 'invoices' | 'pending' | 'recent'
 
 const starterMessages: ChatMessage[] = [
   {
@@ -94,7 +96,12 @@ function App() {
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [activeSection, setActiveSection] = useState<RailSection>('daily')
   const inputRef = useRef<HTMLInputElement>(null)
+  const overviewRef = useRef<HTMLElement>(null)
+  const invoiceRef = useRef<HTMLElement>(null)
+  const pendingRef = useRef<HTMLElement>(null)
+  const recentRef = useRef<HTMLElement>(null)
 
   const loadSummary = async () => {
     setError('')
@@ -167,6 +174,16 @@ function App() {
     'Paguei a internet',
   ]
 
+  const railItems = useMemo(
+    () => [
+      { id: 'daily' as const, label: 'Painel diario', meta: `${summary?.recentEntries.length ?? 0} lancamentos`, ref: overviewRef },
+      { id: 'invoices' as const, label: 'Faturas', meta: `${summary?.openInvoices.length ?? 0} abertas`, ref: invoiceRef },
+      { id: 'pending' as const, label: 'Pendencias', meta: `${summary?.pendingEntries.length ?? 0} contas`, ref: pendingRef },
+      { id: 'recent' as const, label: 'Lancamentos', meta: `${summary?.recentEntries.length ?? 0} registros`, ref: recentRef },
+    ],
+    [summary],
+  )
+
   const ask = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     const text = question.trim()
@@ -195,6 +212,13 @@ function App() {
     window.setTimeout(() => inputRef.current?.focus(), 0)
   }
 
+  const selectRail = (section: RailSection, target: RefObject<HTMLElement | null>) => {
+    setActiveSection(section)
+    window.requestAnimationFrame(() => {
+      target.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
+  }
+
   return (
     <main className="executive-shell">
       <aside className="exec-rail" aria-label="Resumo lateral">
@@ -212,6 +236,21 @@ function App() {
           <span>Pendências</span>
           <span>Lançamentos</span>
         </div>
+
+        <nav className="rail-actions" aria-label="Secoes">
+          {railItems.map((item) => (
+            <button
+              type="button"
+              className={activeSection === item.id ? 'active' : ''}
+              aria-current={activeSection === item.id ? 'page' : undefined}
+              onClick={() => selectRail(item.id, item.ref)}
+              key={item.id}
+            >
+              <span>{item.label}</span>
+              <small>{item.meta}</small>
+            </button>
+          ))}
+        </nav>
 
         <div className="rail-balance">
           <small>após pendências</small>
@@ -239,7 +278,7 @@ function App() {
 
         {error && <div className="status-line danger">{error}</div>}
 
-        <section className="executive-overview" aria-label="Resumo executivo">
+        <section className={`executive-overview ${activeSection === 'daily' ? 'focused-section' : ''}`} aria-label="Resumo executivo" ref={overviewRef}>
           <article className="primary-balance">
             <div>
               <span>saldo líquido</span>
@@ -343,6 +382,8 @@ function App() {
 
           <ListPanel
             className="pending-panel"
+            sectionRef={pendingRef}
+            focused={activeSection === 'pending'}
             title="Contas pendentes"
             eyebrow="a pagar"
             icon={<FileClock size={19} />}
@@ -350,10 +391,12 @@ function App() {
             entries={summary?.pendingEntries ?? []}
           />
 
-          <InvoicePanel invoices={summary?.openInvoices ?? []} />
+          <InvoicePanel invoices={summary?.openInvoices ?? []} sectionRef={invoiceRef} focused={activeSection === 'invoices'} />
 
           <ListPanel
             className="recent-panel"
+            sectionRef={recentRef}
+            focused={activeSection === 'recent'}
             title="Últimos lançamentos"
             eyebrow="histórico"
             icon={<ListChecks size={19} />}
@@ -434,6 +477,8 @@ function WorkWeekPanel({
 
 function ListPanel({
   className = '',
+  sectionRef,
+  focused = false,
   title,
   eyebrow,
   icon,
@@ -442,6 +487,8 @@ function ListPanel({
   recent = false,
 }: {
   className?: string
+  sectionRef?: RefObject<HTMLElement | null>
+  focused?: boolean
   title: string
   eyebrow: string
   icon: ReactNode
@@ -450,7 +497,7 @@ function ListPanel({
   recent?: boolean
 }) {
   return (
-    <section className={`list-panel ${className}`}>
+    <section className={`list-panel ${className} ${focused ? 'focused-panel' : ''}`} ref={sectionRef}>
       <div className="section-title">
         <div>
           <span>{eyebrow}</span>
@@ -481,9 +528,17 @@ function ListPanel({
   )
 }
 
-function InvoicePanel({ invoices }: { invoices: SimpleInvoice[] }) {
+function InvoicePanel({
+  invoices,
+  sectionRef,
+  focused = false,
+}: {
+  invoices: SimpleInvoice[]
+  sectionRef?: RefObject<HTMLElement | null>
+  focused?: boolean
+}) {
   return (
-    <section className="list-panel invoice-panel">
+    <section className={`list-panel invoice-panel ${focused ? 'focused-panel' : ''}`} ref={sectionRef}>
       <div className="section-title">
         <div>
           <span>cartão</span>

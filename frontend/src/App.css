@@ -47,7 +47,7 @@ button:disabled {
   top: 18px;
   height: calc(100dvh - 36px);
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows: auto auto 1fr auto;
   gap: 18px;
   padding: 16px;
 }
@@ -107,26 +107,48 @@ button:disabled {
 }
 
 .rail-menu {
+  display: none;
+}
+
+.rail-actions {
   display: grid;
   gap: 8px;
   align-content: start;
 }
 
-.rail-menu span {
+.rail-actions button {
   min-height: 42px;
-  display: flex;
+  display: grid;
+  gap: 3px;
   align-items: center;
   padding: 0 12px;
+  border: 1px solid transparent;
   border-radius: 8px;
   color: #a8b5c1;
+  background: transparent;
   font-size: 14px;
   font-weight: 760;
+  text-align: left;
 }
 
-.rail-menu span.active {
+.rail-actions button span {
+  color: inherit;
+}
+
+.rail-actions button small {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 720;
+}
+
+.rail-actions button.active {
   color: var(--heading);
   border: 1px solid rgba(91, 221, 128, 0.22);
   background: rgba(91, 221, 128, 0.1);
+}
+
+.rail-actions button.active small {
+  color: var(--accent-strong);
 }
 
 .rail-balance {
@@ -331,6 +353,22 @@ button:disabled {
     "recent recent recent";
   gap: 14px;
   align-items: start;
+}
+
+.executive-overview,
+.invoice-panel,
+.pending-panel,
+.recent-panel {
+  scroll-margin-top: 18px;
+}
+
+.focused-panel,
+.focused-section .primary-balance,
+.focused-section .pending-impact {
+  border-color: rgba(91, 221, 128, 0.42);
+  box-shadow:
+    0 18px 50px rgba(0, 0, 0, 0.24),
+    0 0 0 1px rgba(91, 221, 128, 0.08);
 }
 
 .chat-panel {
@@ -683,6 +721,12 @@ button:disabled {
     transform: translateY(-1px);
   }
 
+  .rail-actions button:hover {
+    color: var(--heading);
+    border-color: rgba(167, 184, 202, 0.16);
+    background: rgba(255, 255, 255, 0.035);
+  }
+
   .metric:hover,
   .chat-panel:hover,
   .summary-panel:hover,
@@ -757,9 +801,19 @@ button:disabled {
 
   .brand-block div,
   .rail-menu,
+  .rail-actions small,
   .rail-balance small,
   .rail-balance span {
     display: none;
+  }
+
+  .rail-actions button {
+    min-height: 48px;
+    justify-items: center;
+    padding: 0 5px;
+    text-align: center;
+    font-size: 10px;
+    line-height: 1.1;
   }
 
   .rail-balance {
@@ -819,6 +873,10 @@ button:disabled {
   }
 
   .rail-menu {
+    display: none;
+  }
+
+  .rail-actions {
     display: none;
   }
 
