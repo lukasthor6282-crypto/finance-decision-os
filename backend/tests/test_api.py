@@ -130,6 +130,52 @@ def test_agent_purchase_decision(tmp_path, monkeypatch):
     assert body["data"]["amount"] == 900
 
 
+def test_simple_finance_records_invoice_and_partial_payment(tmp_path, monkeypatch):
+    client = make_empty_client(tmp_path, monkeypatch)
+
+    invoice = client.post(
+        "/api/simple/chat",
+        json={"message": "Tenho R$ 1.081,38 de fatura, R$ 481 é da parcela do meu celular, o resto são compras avulsas."},
+    )
+    payment = client.post("/api/simple/chat", json={"message": "Paguei R$ 300 da fatura."})
+
+    assert invoice.status_code == 200
+    assert invoice.json()["intent"] == "registrar_fatura"
+    assert payment.status_code == 200
+    assert payment.json()["intent"] == "pagar_fatura_parcial"
+
+    summary = client.get("/api/simple/summary").json()
+    assert summary["totals"]["openInvoices"] == 781.38
+    assert summary["totals"]["paidExpenses"] == 300
+    assert summary["totals"]["balanceAfterPending"] == -1081.38
+    items = summary["openInvoices"][0]["items"]
+    assert items[0]["description"] == "parcela do celular"
+    assert items[0]["amount"] == 481
+    assert items[1]["description"] == "compras avulsas"
+    assert items[1]["amount"] == 600.38
+
+
+def test_simple_finance_daily_income_expense_and_pending_payment(tmp_path, monkeypatch):
+    client = make_empty_client(tmp_path, monkeypatch)
+
+    income = client.post("/api/simple/chat", json={"message": "Hoje ganhei R$ 250"})
+    expense = client.post("/api/simple/chat", json={"message": "Gastei R$ 40 no mercado"})
+    pending = client.post("/api/simple/chat", json={"message": "Tenho R$ 120 de internet para pagar"})
+    paid = client.post("/api/simple/chat", json={"message": "Paguei a internet"})
+
+    assert income.json()["intent"] == "registrar_receita"
+    assert expense.json()["intent"] == "registrar_despesa_paga"
+    assert pending.json()["intent"] == "registrar_despesa_pendente"
+    assert paid.json()["intent"] == "pagar_despesa"
+
+    summary = client.get("/api/simple/summary").json()
+    assert summary["totals"]["income"] == 250
+    assert summary["totals"]["paidExpenses"] == 160
+    assert summary["totals"]["pendingExpenses"] == 0
+    assert summary["totals"]["netBalance"] == 90
+    assert summary["totals"]["balanceAfterPending"] == 90
+
+
 def test_agent_records_income_and_sums_repeated_entries(tmp_path, monkeypatch):
     client = make_client(tmp_path, monkeypatch)
     start_balance = client.get("/api/dashboard").json()["kpis"]["balance"]

@@ -34,6 +34,7 @@ from .repository import (
 )
 from .schemas import AgentRequest, AgentResponse, BudgetIn, CategoryRuleIn, GoalIn, GoalPatch, ScenarioRequest, TransactionIn, TransactionPatch
 from .seed import seed_demo
+from .simple_finance import handle_simple_message, simple_summary
 
 
 def startup() -> None:
@@ -53,6 +54,12 @@ DEFAULT_ALLOWED_ORIGINS = ",".join(
     [
         "http://localhost:5173",
         "http://127.0.0.1:5173",
+        "http://localhost:5174",
+        "http://127.0.0.1:5174",
+        "http://localhost:5175",
+        "http://127.0.0.1:5175",
+        "http://localhost:5176",
+        "http://127.0.0.1:5176",
         "https://finance-decision-os.pages.dev",
     ]
 )
@@ -113,6 +120,12 @@ def api_summary(month: str | None = None) -> dict:
 def api_dashboard(month: str | None = None) -> dict:
     with connect() as conn:
         return summarize(conn, month=month)
+
+
+@app.get("/api/simple/summary")
+def api_simple_summary(month: str | None = None) -> dict:
+    with connect() as conn:
+        return simple_summary(conn, month=month)
 
 
 @app.get("/api/insights")
@@ -421,6 +434,24 @@ def api_agent(payload: AgentRequest) -> dict:
         return result
 
 
+@app.post("/api/simple/chat", response_model=AgentResponse)
+def api_simple_agent(payload: AgentRequest) -> dict:
+    with connect() as conn:
+        conn.execute("INSERT INTO chat_messages (role, content) VALUES ('user', ?)", (payload.message,))
+        result = handle_simple_message(conn, payload.message)
+        if result is None:
+            result = {
+                "answer": "Nao entendi com seguranca. Escreva tipo: ganhei R$ 250, gastei R$ 40 no mercado, tenho R$ 120 de internet para pagar, ou paguei R$ 300 da fatura.",
+                "actions": ["nao_entendido"],
+                "confidence": 0.35,
+                "mode": "simple",
+                "intent": "pedir_dados_faltantes",
+                "data": {},
+            }
+        conn.execute("INSERT INTO chat_messages (role, content) VALUES ('assistant', ?)", (result["answer"],))
+        return result
+
+
 @app.post("/api/scenario")
 def api_scenario(payload: ScenarioRequest) -> dict:
     with connect() as conn:
@@ -438,7 +469,19 @@ def api_seed() -> dict:
 def api_delete_demo_data() -> dict:
     with connect() as conn:
         deleted = {}
-        for table in ("transactions", "budgets", "goals", "chat_messages", "learned_patterns", "user_facts", "work_sessions", "commitments"):
+        for table in (
+            "transactions",
+            "budgets",
+            "goals",
+            "chat_messages",
+            "learned_patterns",
+            "user_facts",
+            "work_sessions",
+            "commitments",
+            "simple_invoice_items",
+            "simple_invoices",
+            "simple_entries",
+        ):
             cursor = conn.execute(f"DELETE FROM {table}")
             deleted[table] = cursor.rowcount
         return {"ok": True, "deleted": deleted}

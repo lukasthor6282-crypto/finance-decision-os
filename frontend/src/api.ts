@@ -1,4 +1,4 @@
-import type { AgentReply, CategoryRule, Commitment, FinanceSummary, Goal, ImportMapping, ImportPreview, ImportResult, Insight, Transaction, WorkSession } from './types'
+import type { AgentReply, CategoryRule, Commitment, FinanceSummary, Goal, ImportMapping, ImportPreview, ImportResult, Insight, SimpleSummary, Transaction, WorkSession } from './types'
 
 const DEFAULT_PRODUCTION_API_URL = 'https://finance-decision-os.onrender.com'
 const API_BASE_URL = resolveApiBaseUrl()
@@ -66,6 +66,10 @@ export function getSummary() {
   return request<FinanceSummary>('/api/dashboard')
 }
 
+export function getSimpleSummary() {
+  return request<SimpleSummary>('/api/simple/summary')
+}
+
 export function getInsights() {
   return request<Insight[]>('/api/insights')
 }
@@ -113,7 +117,7 @@ export function reprocessTransactions() {
 }
 
 export function askAgent(message: string) {
-  return request<AgentReply>('/api/agent/chat', {
+  return request<AgentReply>('/api/simple/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ message }),

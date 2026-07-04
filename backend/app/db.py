@@ -296,7 +296,98 @@ def init_postgres() -> None:
         migrate_db(conn)
 
 
+def create_simple_tables(conn: sqlite3.Connection) -> None:
+    if is_postgres(conn):
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS simple_entries (
+                id BIGSERIAL PRIMARY KEY,
+                kind TEXT NOT NULL,
+                description TEXT NOT NULL,
+                amount DOUBLE PRECISION NOT NULL,
+                date TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pago',
+                category TEXT NOT NULL DEFAULT 'Geral',
+                origin TEXT NOT NULL DEFAULT 'chat',
+                invoice_id BIGINT,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS simple_invoices (
+                id BIGSERIAL PRIMARY KEY,
+                name TEXT NOT NULL,
+                total_amount DOUBLE PRECISION NOT NULL,
+                paid_amount DOUBLE PRECISION NOT NULL DEFAULT 0,
+                remaining_amount DOUBLE PRECISION NOT NULL,
+                due_date TEXT,
+                status TEXT NOT NULL DEFAULT 'aberta',
+                created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS simple_invoice_items (
+                id BIGSERIAL PRIMARY KEY,
+                invoice_id BIGINT NOT NULL REFERENCES simple_invoices(id) ON DELETE CASCADE,
+                description TEXT NOT NULL,
+                amount DOUBLE PRECISION NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pendente',
+                created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+    else:
+        conn.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS simple_entries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                kind TEXT NOT NULL,
+                description TEXT NOT NULL,
+                amount REAL NOT NULL,
+                date TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pago',
+                category TEXT NOT NULL DEFAULT 'Geral',
+                origin TEXT NOT NULL DEFAULT 'chat',
+                invoice_id INTEGER,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS simple_invoices (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                total_amount REAL NOT NULL,
+                paid_amount REAL NOT NULL DEFAULT 0,
+                remaining_amount REAL NOT NULL,
+                due_date TEXT,
+                status TEXT NOT NULL DEFAULT 'aberta',
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS simple_invoice_items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                invoice_id INTEGER NOT NULL REFERENCES simple_invoices(id) ON DELETE CASCADE,
+                description TEXT NOT NULL,
+                amount REAL NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pendente',
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+            """
+        )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_simple_entries_date ON simple_entries(date)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_simple_entries_status ON simple_entries(status)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_simple_entries_kind ON simple_entries(kind)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_simple_invoices_status ON simple_invoices(status)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_simple_invoice_items_invoice ON simple_invoice_items(invoice_id)")
+
+
 def migrate_db(conn: sqlite3.Connection) -> None:
+    create_simple_tables(conn)
     if not is_postgres(conn):
         conn.execute(
             """

@@ -173,6 +173,57 @@ export type AgentReply = {
   data?: unknown
 }
 
+export type SimpleEntry = {
+  id: number
+  kind: 'receita' | 'despesa' | 'pagamento' | 'fatura'
+  description: string
+  amount: number
+  date: string
+  status: 'pago' | 'pendente' | 'aberta' | 'parcial' | 'paga'
+  category: string
+  origin: string
+  invoice_id?: number | null
+  created_at?: string
+}
+
+export type SimpleInvoiceItem = {
+  id: number
+  invoice_id: number
+  description: string
+  amount: number
+  status: 'pago' | 'pendente'
+  created_at?: string
+}
+
+export type SimpleInvoice = {
+  id: number
+  name: string
+  total_amount: number
+  paid_amount: number
+  remaining_amount: number
+  due_date?: string | null
+  status: 'aberta' | 'parcial' | 'paga'
+  created_at?: string
+  updated_at?: string
+  items: SimpleInvoiceItem[]
+}
+
+export type SimpleSummary = {
+  month: string
+  asOf: string
+  totals: {
+    income: number
+    paidExpenses: number
+    pendingExpenses: number
+    openInvoices: number
+    netBalance: number
+    balanceAfterPending: number
+  }
+  pendingEntries: SimpleEntry[]
+  openInvoices: SimpleInvoice[]
+  recentEntries: SimpleEntry[]
+}
+
 export type ImportMapping = {
   date?: string | null
   description?: string | null
