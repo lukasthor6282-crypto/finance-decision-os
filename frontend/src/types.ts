@@ -222,6 +222,15 @@ export type SimpleWorkSession = {
   created_at?: string
 }
 
+export type SimpleWorkDay = {
+  date: string
+  weekday: string
+  hours: number
+  gross: number
+  sessions: SimpleWorkSession[]
+  status: 'salvo' | 'vazio'
+}
+
 export type SimpleSummary = {
   month: string
   asOf: string
@@ -239,8 +248,11 @@ export type SimpleSummary = {
   workWeek: {
     weekStart: string
     weekEnd: string
+    weekKey?: string
     hours: number
     gross: number
+    archivedWeeks?: number
+    days?: SimpleWorkDay[]
     sessions: SimpleWorkSession[]
   }
 }

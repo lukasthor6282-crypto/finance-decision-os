@@ -16,7 +16,7 @@ import {
   Wallet,
 } from 'lucide-react'
 import { askAgent, getSimpleSummary } from './api'
-import type { SimpleEntry, SimpleInvoice, SimpleSummary, SimpleWorkSession } from './types'
+import type { SimpleEntry, SimpleInvoice, SimpleSummary, SimpleWorkDay, SimpleWorkSession } from './types'
 import './App.css'
 
 type ChatMessage = {
@@ -61,6 +61,30 @@ const formatWorkHours = (value = 0) => {
   const minutes = Math.round((value - hours) * 60)
   if (!minutes) return `${hours}h`
   return `${hours}h${String(minutes).padStart(2, '0')}`
+}
+
+const workdayNames = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex']
+
+const buildWorkDays = (weekStart?: string, sessions: SimpleWorkSession[] = []): SimpleWorkDay[] => {
+  const base = weekStart ? new Date(`${weekStart}T12:00:00`) : new Date()
+  if (!weekStart) {
+    base.setDate(base.getDate() - ((base.getDay() + 6) % 7))
+  }
+
+  return workdayNames.map((weekday, index) => {
+    const current = new Date(base)
+    current.setDate(base.getDate() + index)
+    const day = current.toISOString().slice(0, 10)
+    const daySessions = sessions.filter((session) => session.date === day)
+    return {
+      date: day,
+      weekday,
+      hours: daySessions.reduce((total, session) => total + session.hours, 0),
+      gross: daySessions.reduce((total, session) => total + session.gross_amount, 0),
+      sessions: daySessions,
+      status: daySessions.length ? 'salvo' : 'vazio',
+    }
+  })
 }
 
 function App() {
@@ -308,7 +332,14 @@ function App() {
             </div>
           </section>
 
-          <WorkWeekPanel sessions={summary?.workWeek?.sessions ?? []} hours={summary?.workWeek?.hours ?? 0} gross={summary?.workWeek?.gross ?? 0} />
+          <WorkWeekPanel
+            days={summary?.workWeek?.days}
+            sessions={summary?.workWeek?.sessions ?? []}
+            hours={summary?.workWeek?.hours ?? 0}
+            gross={summary?.workWeek?.gross ?? 0}
+            weekStart={summary?.workWeek?.weekStart}
+            weekEnd={summary?.workWeek?.weekEnd}
+          />
 
           <ListPanel
             className="pending-panel"
@@ -349,7 +380,23 @@ function MetricTile({ item }: { item: MetricItem }) {
   )
 }
 
-function WorkWeekPanel({ sessions, hours, gross }: { sessions: SimpleWorkSession[]; hours: number; gross: number }) {
+function WorkWeekPanel({
+  days,
+  sessions,
+  hours,
+  gross,
+  weekStart,
+  weekEnd,
+}: {
+  days?: SimpleWorkDay[]
+  sessions: SimpleWorkSession[]
+  hours: number
+  gross: number
+  weekStart?: string
+  weekEnd?: string
+}) {
+  const workDays = days?.length ? days.slice(0, 5) : buildWorkDays(weekStart, sessions)
+
   return (
     <section className="work-week-panel">
       <div className="section-title">
@@ -360,17 +407,26 @@ function WorkWeekPanel({ sessions, hours, gross }: { sessions: SimpleWorkSession
         <Clock3 size={19} />
       </div>
       <div className="work-total">
-        <strong>{formatWorkHours(hours)}</strong>
+        <div>
+          <strong>{formatWorkHours(hours)}</strong>
+          <small>{weekStart && weekEnd ? `${formatDate(weekStart)} ate ${formatDate(weekEnd)}` : 'semana atual'}</small>
+        </div>
         <span>{money(gross)} bruto</span>
       </div>
       <div className="work-list">
-        {sessions.slice(-4).map((session) => (
-          <article key={session.id}>
-            <span>{formatDate(session.date)} · {session.start_time ?? 'manual'}{session.end_time ? `-${session.end_time}` : ''}</span>
-            <b>{formatWorkHours(session.hours)}</b>
+        {workDays.map((day, index) => (
+          <article className={day.status === 'vazio' ? 'empty-day' : ''} key={day.date}>
+            <div>
+              <strong>{workdayNames[index] ?? day.weekday}</strong>
+              <span>
+                {formatDate(day.date)} · {day.sessions.length
+                  ? day.sessions.map((session) => `${session.start_time ?? 'manual'}${session.end_time ? `-${session.end_time}` : ''}`).join(', ')
+                  : 'sem jornada'}
+              </span>
+            </div>
+            <b>{formatWorkHours(day.hours)}</b>
           </article>
         ))}
-        {!sessions.length && <p>Nenhuma jornada salva nesta semana.</p>}
       </div>
     </section>
   )

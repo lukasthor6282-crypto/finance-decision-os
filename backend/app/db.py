@@ -386,8 +386,41 @@ def create_simple_tables(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_simple_invoice_items_invoice ON simple_invoice_items(invoice_id)")
 
 
+def create_work_week_archive_table(conn: sqlite3.Connection) -> None:
+    if is_postgres(conn):
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS work_week_archives (
+                week_start TEXT PRIMARY KEY,
+                week_end TEXT NOT NULL,
+                hours DOUBLE PRECISION NOT NULL DEFAULT 0,
+                gross_amount DOUBLE PRECISION NOT NULL DEFAULT 0,
+                session_count INTEGER NOT NULL DEFAULT 0,
+                archived_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+    else:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS work_week_archives (
+                week_start TEXT PRIMARY KEY,
+                week_end TEXT NOT NULL,
+                hours REAL NOT NULL DEFAULT 0,
+                gross_amount REAL NOT NULL DEFAULT 0,
+                session_count INTEGER NOT NULL DEFAULT 0,
+                archived_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_work_week_archives_week_end ON work_week_archives(week_end)")
+
+
 def migrate_db(conn: sqlite3.Connection) -> None:
     create_simple_tables(conn)
+    create_work_week_archive_table(conn)
     if not is_postgres(conn):
         conn.execute(
             """

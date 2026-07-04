@@ -191,11 +191,53 @@ def test_simple_finance_records_weekly_work_hours(tmp_path, monkeypatch):
     assert body["data"]["gross"] == 102
     assert body["data"]["workWeek"]["hours"] == 8.5
     assert body["data"]["workWeek"]["gross"] == 102
+    assert len(body["data"]["workWeek"]["days"]) == 5
+    assert body["data"]["workWeek"]["days"][0]["weekday"] == "segunda"
     assert "Total da semana" in body["answer"]
 
     summary = client.get("/api/simple/summary").json()
     assert summary["workWeek"]["hours"] == 8.5
     assert summary["workWeek"]["gross"] == 102
+    assert len(summary["workWeek"]["days"]) == 5
+
+
+def test_work_week_summary_keeps_weeks_separated(tmp_path, monkeypatch):
+    make_empty_client(tmp_path, monkeypatch)
+
+    import app.db as db
+    from app.simple_finance import work_week_summary
+
+    with db.connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO work_sessions (date, start_time, end_time, hourly_rate, hours, gross_amount, description)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            ("2026-06-29", "10:00", "12:00", 12, 2, 24, "Horas trabalhadas 10:00-12:00"),
+        )
+        conn.execute(
+            """
+            INSERT INTO work_sessions (date, start_time, end_time, hourly_rate, hours, gross_amount, description)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            ("2026-07-06", "10:00", "13:00", 12, 3, 36, "Horas trabalhadas 10:00-13:00"),
+        )
+        old_week = work_week_summary(conn, "2026-07-02")
+        new_week = work_week_summary(conn, "2026-07-08")
+        archived = conn.execute(
+            "SELECT week_start, hours, gross_amount, session_count FROM work_week_archives WHERE week_start = ?",
+            ("2026-06-29",),
+        ).fetchone()
+
+    assert old_week["hours"] == 2
+    assert new_week["hours"] == 3
+    assert old_week["weekKey"] != new_week["weekKey"]
+    assert new_week["archivedWeeks"] == 1
+    assert archived["hours"] == 2
+    assert archived["gross_amount"] == 24
+    assert archived["session_count"] == 1
+    assert len(old_week["days"]) == 5
+    assert len(new_week["days"]) == 5
 
 
 def test_agent_records_income_and_sums_repeated_entries(tmp_path, monkeypatch):

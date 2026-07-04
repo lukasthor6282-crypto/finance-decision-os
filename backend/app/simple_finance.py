@@ -165,6 +165,7 @@ def work_week_summary(conn: Connection, anchor_date: str | None = None) -> dict:
     current = date.fromisoformat(anchor_date) if anchor_date else date.today()
     week_start = current - timedelta(days=current.weekday())
     week_end = week_start + timedelta(days=6)
+    archived_weeks = _archive_closed_work_weeks(conn, week_start)
     rows = _rows(
         conn.execute(
             """
@@ -178,13 +179,90 @@ def work_week_summary(conn: Connection, anchor_date: str | None = None) -> dict:
     )
     hours = _round(sum(float(row["hours"]) for row in rows))
     gross = _round(sum(float(row["gross_amount"]) for row in rows))
+    days = _work_week_days(week_start, rows)
     return {
         "weekStart": week_start.isoformat(),
         "weekEnd": week_end.isoformat(),
+        "weekKey": f"{week_start.isoformat()}:{week_end.isoformat()}",
         "hours": hours,
         "gross": gross,
+        "archivedWeeks": archived_weeks,
+        "days": days,
         "sessions": rows,
     }
+
+
+def _archive_closed_work_weeks(conn: Connection, current_week_start: date) -> int:
+    rows = _rows(
+        conn.execute(
+            """
+            SELECT date, hours, gross_amount
+            FROM work_sessions
+            WHERE date < ?
+            """,
+            (current_week_start.isoformat(),),
+        ).fetchall()
+    )
+    grouped: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        session_date = date.fromisoformat(row["date"])
+        week_start = session_date - timedelta(days=session_date.weekday())
+        week_end = week_start + timedelta(days=6)
+        key = week_start.isoformat()
+        if key not in grouped:
+            grouped[key] = {
+                "week_start": key,
+                "week_end": week_end.isoformat(),
+                "hours": 0.0,
+                "gross_amount": 0.0,
+                "session_count": 0,
+            }
+        grouped[key]["hours"] = _round(grouped[key]["hours"] + float(row["hours"]))
+        grouped[key]["gross_amount"] = _round(grouped[key]["gross_amount"] + float(row["gross_amount"]))
+        grouped[key]["session_count"] += 1
+
+    for item in grouped.values():
+        conn.execute(
+            """
+            INSERT INTO work_week_archives (week_start, week_end, hours, gross_amount, session_count, updated_at)
+            VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(week_start) DO UPDATE SET
+                week_end = excluded.week_end,
+                hours = excluded.hours,
+                gross_amount = excluded.gross_amount,
+                session_count = excluded.session_count,
+                updated_at = CURRENT_TIMESTAMP
+            """,
+            (
+                item["week_start"],
+                item["week_end"],
+                item["hours"],
+                item["gross_amount"],
+                item["session_count"],
+            ),
+        )
+    return len(grouped)
+
+
+def _work_week_days(week_start: date, sessions: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    days: list[dict[str, Any]] = []
+    for index in range(5):
+        current = week_start + timedelta(days=index)
+        current_key = current.isoformat()
+        day_sessions = [session for session in sessions if session["date"] == current_key]
+        hours = _round(sum(float(session["hours"]) for session in day_sessions))
+        gross = _round(sum(float(session["gross_amount"]) for session in day_sessions))
+        days.append(
+            {
+                "date": current_key,
+                "weekday": ["segunda", "terca", "quarta", "quinta", "sexta"][index],
+                "hours": hours,
+                "gross": gross,
+                "sessions": day_sessions,
+                "status": "salvo" if day_sessions else "vazio",
+            }
+        )
+    return days
 
 
 def _record_invoice(conn: Connection, original: str, normalized: str, amounts: list[float]) -> dict:
