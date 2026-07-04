@@ -1,26 +1,31 @@
 :root {
-  --bg: #f4f6f8;
-  --surface: #fbfcfd;
+  --bg: #edf1f5;
+  --surface: #f8fafc;
   --surface-raised: #ffffff;
   --surface-muted: #eef2f5;
   --surface-pressed: #e8edf2;
-  --border: #d9dee5;
-  --border-strong: #c4ccd5;
-  --heading: #0e1721;
+  --border: #d6dde6;
+  --border-strong: #b9c4d0;
+  --heading: #0b1220;
   --text: #27313d;
   --muted: #657180;
   --muted-strong: #4b5867;
   --accent: #116a55;
   --accent-strong: #0b5141;
   --accent-soft: #e3f2ec;
+  --nav-bg: #101820;
+  --nav-bg-soft: #17232e;
+  --nav-text: #c7d0db;
+  --nav-muted: #7f8c99;
   --danger: #b42318;
   --danger-soft: #fce7e4;
   --warning: #9a5b05;
   --warning-soft: #fff2cc;
   --income: #0f7a5f;
   --expense: #b42318;
-  --shadow-sm: 0 1px 2px rgb(16 24 40 / 0.06);
-  --shadow-md: 0 14px 34px rgb(16 24 40 / 0.08);
+  --shadow-sm: 0 1px 2px rgb(15 23 42 / 0.06), 0 1px 0 rgb(255 255 255 / 0.72) inset;
+  --shadow-md: 0 18px 44px rgb(15 23 42 / 0.10), 0 1px 0 rgb(255 255 255 / 0.86) inset;
+  --shadow-nav: 12px 0 34px rgb(15 23 42 / 0.10);
   --radius: 8px;
   --radius-sm: 6px;
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
@@ -28,7 +33,9 @@
   --ui: Aptos, "Segoe UI", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   --numbers: "SF Mono", "Roboto Mono", ui-monospace, Consolas, monospace;
   color: var(--text);
-  background: var(--bg);
+  background:
+    linear-gradient(180deg, #f7f9fb 0%, #edf1f5 360px),
+    var(--bg);
   color-scheme: light;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
