@@ -23,6 +23,16 @@ type ChatMessage = {
   text: string
 }
 
+type MetricTone = 'income' | 'expense' | 'pending'
+
+type MetricItem = {
+  label: string
+  value: string
+  detail: string
+  icon: ReactNode
+  tone: MetricTone
+}
+
 const starterMessages: ChatMessage[] = [
   {
     author: 'Finance OS',
@@ -34,9 +44,9 @@ const money = (value = 0) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
 
 const formatDate = (value: string) => {
-  const date = new Date(`${value}T12:00:00`)
-  if (Number.isNaN(date.getTime())) return value
-  return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit' }).format(date)
+  const parsed = new Date(`${value}T12:00:00`)
+  if (Number.isNaN(parsed.getTime())) return value
+  return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit' }).format(parsed)
 }
 
 const formatMonth = (value?: string) => {
@@ -74,7 +84,7 @@ function App() {
   const totals = summary?.totals
   const totalPending = (totals?.pendingExpenses ?? 0) + (totals?.openInvoices ?? 0)
 
-  const metrics = useMemo(
+  const metrics = useMemo<MetricItem[]>(
     () => [
       {
         label: 'Entradas do mês',
@@ -103,20 +113,6 @@ function App() {
         detail: `${summary?.openInvoices.length ?? 0} fatura(s)`,
         icon: <CreditCard size={18} />,
         tone: 'pending',
-      },
-      {
-        label: 'Saldo líquido',
-        value: money(totals?.netBalance),
-        detail: 'entradas - saídas pagas',
-        icon: <Wallet size={18} />,
-        tone: (totals?.netBalance ?? 0) < 0 ? 'expense' : 'income',
-      },
-      {
-        label: 'Após pendências',
-        value: money(totals?.balanceAfterPending),
-        detail: 'se pagar tudo aberto',
-        icon: <Landmark size={18} />,
-        tone: (totals?.balanceAfterPending ?? 0) < 0 ? 'expense' : 'income',
       },
     ],
     [summary, totals],
@@ -160,119 +156,176 @@ function App() {
   }
 
   return (
-    <main className="daily-shell">
-      <section className="daily-top">
-        <div>
-          <span>{formatMonth(summary?.month)}</span>
-          <h1>Finance OS</h1>
-          <p>Bloco de notas financeiro. Fale, salve, pague, acompanhe.</p>
+    <main className="executive-shell">
+      <aside className="exec-rail" aria-label="Resumo lateral">
+        <div className="brand-block">
+          <span>FO</span>
+          <div>
+            <strong>Finance OS</strong>
+            <small>Controle pessoal</small>
+          </div>
         </div>
-        <button type="button" onClick={() => void loadSummary()} disabled={loading}>
-          {loading ? <Loader2 size={17} className="spin" /> : <RefreshCw size={17} />}
-          Atualizar
-        </button>
-      </section>
 
-      {error && <div className="status-line danger">{error}</div>}
+        <div className="rail-menu" aria-label="Seções">
+          <span className="active">Painel diário</span>
+          <span>Faturas</span>
+          <span>Pendências</span>
+          <span>Lançamentos</span>
+        </div>
 
-      <section className="metric-grid" aria-label="Resumo financeiro">
-        {metrics.map((item) => (
-          <article className={`metric ${item.tone}`} key={item.label}>
-            <span>{item.icon}</span>
-            <div>
-              <small>{item.label}</small>
-              <strong>{item.value}</strong>
-              <p>{item.detail}</p>
-            </div>
-          </article>
-        ))}
-      </section>
+        <div className="rail-balance">
+          <small>após pendências</small>
+          <strong className={(totals?.balanceAfterPending ?? 0) < 0 ? 'expense-text' : 'income-text'}>
+            {money(totals?.balanceAfterPending)}
+          </strong>
+          <span>{summary?.openInvoices.length ?? 0} fatura(s) abertas</span>
+        </div>
+      </aside>
 
-      <section className="control-grid">
-        <section className="chat-panel">
-          <div className="section-title">
-            <div>
-              <span>Chat</span>
-              <h2>Registrar pelo texto</h2>
-            </div>
-            <MessageCircle size={19} />
+      <section className="exec-workspace">
+        <header className="exec-topbar">
+          <div>
+            <span>{formatMonth(summary?.month)}</span>
+            <h1>Controle financeiro diário</h1>
           </div>
-
-          <div className="chat-feed" aria-live="polite">
-            {messages.slice(-8).map((message, index) => (
-              <article className={message.author === 'Voce' ? 'from-user' : ''} key={`${message.author}-${index}-${message.text}`}>
-                <span>{message.author}</span>
-                <p>{message.text}</p>
-              </article>
-            ))}
-          </div>
-
-          <form className="chat-form" onSubmit={ask}>
-            <input
-              ref={inputRef}
-              value={question}
-              onChange={(event) => setQuestion(event.target.value)}
-              placeholder="Ex.: paguei R$ 300 da fatura"
-              disabled={busy}
-            />
-            <button type="submit" disabled={busy || !question.trim()} aria-label="Enviar">
-              {busy ? <Loader2 size={18} className="spin" /> : <Send size={18} />}
+          <div className="top-actions">
+            <span className="sync-pill">{loading ? 'sincronizando' : 'online'}</span>
+            <button type="button" onClick={() => void loadSummary()} disabled={loading}>
+              {loading ? <Loader2 size={17} className="spin" /> : <RefreshCw size={17} />}
+              Atualizar
             </button>
-          </form>
+          </div>
+        </header>
 
-          <div className="drafts" aria-label="Exemplos de comando">
-            {drafts.map((draft) => (
-              <button type="button" key={draft} onClick={() => useDraft(draft)}>
-                {draft}
-              </button>
+        {error && <div className="status-line danger">{error}</div>}
+
+        <section className="executive-overview" aria-label="Resumo executivo">
+          <article className="primary-balance">
+            <div>
+              <span>saldo líquido</span>
+              <strong className={(totals?.netBalance ?? 0) < 0 ? 'expense-text' : ''}>
+                {money(totals?.netBalance)}
+              </strong>
+              <p>Entradas menos saídas já pagas neste mês.</p>
+            </div>
+            <Wallet size={28} />
+          </article>
+
+          <article className="pending-impact">
+            <div>
+              <span>impacto em aberto</span>
+              <strong>{money(totalPending)}</strong>
+              <p>Pendências e faturas que ainda faltam pagar.</p>
+            </div>
+            <Landmark size={28} />
+          </article>
+
+          <div className="metric-grid" aria-label="Indicadores principais">
+            {metrics.map((item) => (
+              <MetricTile item={item} key={item.label} />
             ))}
           </div>
         </section>
 
-        <section className="summary-panel">
-          <div className="section-title">
-            <div>
-              <span>Fechamento</span>
-              <h2>Quanto sobra</h2>
+        <section className="exec-grid">
+          <section className="chat-panel">
+            <div className="section-title">
+              <div>
+                <span>entrada rápida</span>
+                <h2>Bloco financeiro</h2>
+              </div>
+              <MessageCircle size={19} />
             </div>
-            <Wallet size={19} />
-          </div>
-          <div className="closing-number">
-            <small>saldo líquido</small>
-            <strong className={(totals?.netBalance ?? 0) < 0 ? 'expense-text' : ''}>{money(totals?.netBalance)}</strong>
-          </div>
-          <div className="closing-row">
-            <span>Pendências totais</span>
-            <b>{money(totalPending)}</b>
-          </div>
-          <div className="closing-row strong">
-            <span>Depois de pagar tudo</span>
-            <b className={(totals?.balanceAfterPending ?? 0) < 0 ? 'expense-text' : 'income-text'}>
-              {money(totals?.balanceAfterPending)}
-            </b>
-          </div>
+
+            <div className="chat-feed" aria-live="polite">
+              {messages.slice(-8).map((message, index) => (
+                <article className={message.author === 'Voce' ? 'from-user' : ''} key={`${message.author}-${index}-${message.text}`}>
+                  <span>{message.author}</span>
+                  <p>{message.text}</p>
+                </article>
+              ))}
+            </div>
+
+            <form className="chat-form" onSubmit={ask}>
+              <input
+                ref={inputRef}
+                value={question}
+                onChange={(event) => setQuestion(event.target.value)}
+                placeholder="Ex.: paguei R$ 300 da fatura"
+                disabled={busy}
+              />
+              <button type="submit" disabled={busy || !question.trim()} aria-label="Enviar">
+                {busy ? <Loader2 size={18} className="spin" /> : <Send size={18} />}
+              </button>
+            </form>
+
+            <div className="drafts" aria-label="Exemplos de comando">
+              {drafts.map((draft) => (
+                <button type="button" key={draft} onClick={() => useDraft(draft)}>
+                  {draft}
+                </button>
+              ))}
+            </div>
+          </section>
+
+          <section className="summary-panel">
+            <div className="section-title">
+              <div>
+                <span>fechamento</span>
+                <h2>Posição atual</h2>
+              </div>
+              <Wallet size={19} />
+            </div>
+            <div className="closing-number">
+              <small>saldo líquido</small>
+              <strong className={(totals?.netBalance ?? 0) < 0 ? 'expense-text' : ''}>{money(totals?.netBalance)}</strong>
+            </div>
+            <div className="closing-row">
+              <span>Pendências totais</span>
+              <b>{money(totalPending)}</b>
+            </div>
+            <div className="closing-row strong">
+              <span>Depois de pagar tudo</span>
+              <b className={(totals?.balanceAfterPending ?? 0) < 0 ? 'expense-text' : 'income-text'}>
+                {money(totals?.balanceAfterPending)}
+              </b>
+            </div>
+          </section>
+
+          <ListPanel
+            title="Contas pendentes"
+            eyebrow="a pagar"
+            icon={<FileClock size={19} />}
+            empty="Nenhuma conta pendente."
+            entries={summary?.pendingEntries ?? []}
+          />
+
+          <InvoicePanel invoices={summary?.openInvoices ?? []} />
+
+          <ListPanel
+            title="Últimos lançamentos"
+            eyebrow="histórico"
+            icon={<ListChecks size={19} />}
+            empty="Nenhum lançamento ainda."
+            entries={summary?.recentEntries ?? []}
+            recent
+          />
         </section>
-
-        <ListPanel
-          title="Contas pendentes"
-          eyebrow="A pagar"
-          icon={<FileClock size={19} />}
-          empty="Nenhuma conta pendente."
-          entries={summary?.pendingEntries ?? []}
-        />
-
-        <InvoicePanel invoices={summary?.openInvoices ?? []} />
-
-        <ListPanel
-          title="Últimos lançamentos"
-          eyebrow="Histórico"
-          icon={<ListChecks size={19} />}
-          empty="Nenhum lançamento ainda."
-          entries={summary?.recentEntries ?? []}
-          recent
-        />
       </section>
     </main>
+  )
+}
+
+function MetricTile({ item }: { item: MetricItem }) {
+  return (
+    <article className={`metric ${item.tone}`}>
+      <span>{item.icon}</span>
+      <div>
+        <small>{item.label}</small>
+        <strong>{item.value}</strong>
+        <p>{item.detail}</p>
+      </div>
+    </article>
   )
 }
 
@@ -328,7 +381,7 @@ function InvoicePanel({ invoices }: { invoices: SimpleInvoice[] }) {
     <section className="list-panel invoice-panel">
       <div className="section-title">
         <div>
-          <span>Cartão</span>
+          <span>cartão</span>
           <h2>Faturas abertas</h2>
         </div>
         <CreditCard size={19} />

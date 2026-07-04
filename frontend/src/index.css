@@ -1,20 +1,20 @@
 :root {
-  --bg: #061016;
-  --bg-soft: #0a151d;
-  --panel: #101a23;
-  --panel-2: #13212c;
-  --panel-3: #0b141c;
-  --panel-raised: #172430;
+  --bg: #05090d;
+  --bg-soft: #091018;
+  --panel: #0f1720;
+  --panel-2: #121c27;
+  --panel-3: #0b121a;
+  --panel-raised: #172231;
   --border: rgba(158, 184, 205, 0.18);
   --border-strong: rgba(186, 211, 232, 0.34);
-  --heading: #f6f8fb;
-  --text: #d9e1ea;
-  --muted: #8493a2;
-  --muted-strong: #b4c0cc;
-  --accent: #4fd879;
-  --accent-strong: #6ff59a;
-  --accent-deep: #1f8f50;
-  --accent-soft: rgba(79, 216, 121, 0.14);
+  --heading: #f4f7fa;
+  --text: #d4dde6;
+  --muted: #7f8d9b;
+  --muted-strong: #aebbc8;
+  --accent: #48c879;
+  --accent-strong: #74e69b;
+  --accent-deep: #238c54;
+  --accent-soft: rgba(72, 200, 121, 0.14);
   --danger: #ff5d57;
   --danger-soft: rgba(255, 93, 87, 0.12);
   --warning: #ffd166;
@@ -57,10 +57,9 @@ body {
   overflow-x: hidden;
   color: var(--text);
   background:
-    radial-gradient(circle at 48% -14%, rgba(106, 151, 188, 0.22), transparent 38%),
-    radial-gradient(circle at 88% 18%, rgba(79, 216, 121, 0.13), transparent 28%),
-    radial-gradient(circle at 8% 78%, rgba(33, 87, 118, 0.22), transparent 34%),
-    linear-gradient(180deg, #09141d 0%, #050b10 100%);
+    radial-gradient(circle at 54% -18%, rgba(104, 129, 156, 0.18), transparent 42%),
+    radial-gradient(circle at 90% 8%, rgba(72, 200, 121, 0.08), transparent 30%),
+    linear-gradient(180deg, #070c12 0%, #05080c 100%);
   font-family: var(--ui);
   letter-spacing: 0;
 }
@@ -72,8 +71,8 @@ body::after {
   z-index: -1;
   pointer-events: none;
   background:
-    linear-gradient(90deg, rgba(255, 255, 255, 0.035), transparent 18%, transparent 82%, rgba(255, 255, 255, 0.025)),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 18%, rgba(0, 0, 0, 0.24));
+    linear-gradient(90deg, rgba(255, 255, 255, 0.028), transparent 18%, transparent 82%, rgba(255, 255, 255, 0.018)),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 20%, rgba(0, 0, 0, 0.26));
 }
 
 ::selection {
