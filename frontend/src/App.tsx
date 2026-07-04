@@ -1,22 +1,28 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { FormEvent, ReactNode, RefObject } from 'react'
+import type { CSSProperties, FormEvent, ReactNode, RefObject } from 'react'
 import {
-  ArrowDownRight,
-  ArrowUpRight,
+  Bell,
+  Calendar,
   CheckCircle2,
+  ChevronDown,
   Clock3,
   CreditCard,
+  Eye,
   FileClock,
-  Landmark,
+  Grid2X2,
   ListChecks,
   Loader2,
   MessageCircle,
-  RefreshCw,
+  MoreHorizontal,
+  ReceiptText,
   Send,
+  ShieldCheck,
+  Sun,
   Wallet,
+  Zap,
 } from 'lucide-react'
 import { askAgent, getSimpleSummary } from './api'
-import type { SimpleEntry, SimpleInvoice, SimpleSummary, SimpleWorkDay, SimpleWorkSession } from './types'
+import type { SimpleEntry, SimpleInvoice, SimpleSummary } from './types'
 import './App.css'
 
 type ChatMessage = {
@@ -24,17 +30,7 @@ type ChatMessage = {
   text: string
 }
 
-type MetricTone = 'income' | 'expense' | 'pending'
-
-type MetricItem = {
-  label: string
-  value: string
-  detail: string
-  icon: ReactNode
-  tone: MetricTone
-}
-
-type RailSection = 'daily' | 'invoices' | 'pending' | 'recent'
+type RailSection = 'daily' | 'invoices' | 'pending' | 'recent' | 'chat'
 
 const starterMessages: ChatMessage[] = [
   {
@@ -53,7 +49,7 @@ const formatDate = (value: string) => {
 }
 
 const formatMonth = (value?: string) => {
-  if (!value) return 'mês atual'
+  if (!value) return 'Julho de 2026'
   const [year, month] = value.split('-').map(Number)
   return new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric' }).format(new Date(year, month - 1, 1))
 }
@@ -65,30 +61,6 @@ const formatWorkHours = (value = 0) => {
   return `${hours}h${String(minutes).padStart(2, '0')}`
 }
 
-const workdayNames = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex']
-
-const buildWorkDays = (weekStart?: string, sessions: SimpleWorkSession[] = []): SimpleWorkDay[] => {
-  const base = weekStart ? new Date(`${weekStart}T12:00:00`) : new Date()
-  if (!weekStart) {
-    base.setDate(base.getDate() - ((base.getDay() + 6) % 7))
-  }
-
-  return workdayNames.map((weekday, index) => {
-    const current = new Date(base)
-    current.setDate(base.getDate() + index)
-    const day = current.toISOString().slice(0, 10)
-    const daySessions = sessions.filter((session) => session.date === day)
-    return {
-      date: day,
-      weekday,
-      hours: daySessions.reduce((total, session) => total + session.hours, 0),
-      gross: daySessions.reduce((total, session) => total + session.gross_amount, 0),
-      sessions: daySessions,
-      status: daySessions.length ? 'salvo' : 'vazio',
-    }
-  })
-}
-
 function App() {
   const [summary, setSummary] = useState<SimpleSummary | null>(null)
   const [messages, setMessages] = useState<ChatMessage[]>(starterMessages)
@@ -97,18 +69,19 @@ function App() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [activeSection, setActiveSection] = useState<RailSection>('daily')
+
   const inputRef = useRef<HTMLInputElement>(null)
-  const overviewRef = useRef<HTMLElement>(null)
+  const dailyRef = useRef<HTMLElement>(null)
   const invoiceRef = useRef<HTMLElement>(null)
   const pendingRef = useRef<HTMLElement>(null)
   const recentRef = useRef<HTMLElement>(null)
+  const chatRef = useRef<HTMLElement>(null)
 
   const loadSummary = async () => {
     setError('')
     setLoading(true)
     try {
-      const data = await getSimpleSummary()
-      setSummary(data)
+      setSummary(await getSimpleSummary())
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Falha ao carregar dados')
     } finally {
@@ -121,68 +94,43 @@ function App() {
   }, [])
 
   const totals = summary?.totals
-  const totalPending = (totals?.pendingExpenses ?? 0) + (totals?.openInvoices ?? 0)
-
-  const metrics = useMemo<MetricItem[]>(
-    () => [
-      {
-        label: 'Entradas do mês',
-        value: money(totals?.income),
-        detail: 'receitas pagas',
-        icon: <ArrowUpRight size={18} />,
-        tone: 'income',
-      },
-      {
-        label: 'Saídas pagas',
-        value: money(totals?.paidExpenses),
-        detail: 'já saiu do caixa',
-        icon: <ArrowDownRight size={18} />,
-        tone: 'expense',
-      },
-      {
-        label: 'Contas pendentes',
-        value: money(totals?.pendingExpenses),
-        detail: `${summary?.pendingEntries.length ?? 0} em aberto`,
-        icon: <FileClock size={18} />,
-        tone: 'pending',
-      },
-      {
-        label: 'Faturas abertas',
-        value: money(totals?.openInvoices),
-        detail: `${summary?.openInvoices.length ?? 0} fatura(s)`,
-        icon: <CreditCard size={18} />,
-        tone: 'pending',
-      },
-      {
-        label: 'Horas da semana',
-        value: formatWorkHours(summary?.workWeek?.hours ?? 0),
-        detail: `${money(summary?.workWeek?.gross ?? 0)} bruto`,
-        icon: <Clock3 size={18} />,
-        tone: 'income',
-      },
-    ],
-    [summary, totals],
-  )
+  const pendingTotal = (totals?.pendingExpenses ?? 0) + (totals?.openInvoices ?? 0)
+  const netBalance = totals?.netBalance ?? 0
+  const afterPending = totals?.balanceAfterPending ?? 0
+  const workHours = summary?.workWeek?.hours ?? 0
+  const workGoal = 44
+  const workPercent = Math.min(100, Math.round((workHours / workGoal) * 100))
+  const riskPercent = Math.min(86, Math.max(16, Math.round((pendingTotal / Math.max(totals?.income ?? 1, 1)) * 100)))
+  const riskLabel = afterPending < 0 ? 'Alto' : pendingTotal > Math.max(netBalance, 1) ? 'Medio' : 'Baixo'
 
   const drafts = [
+    'Qual meu saldo projetado?',
+    'Posso comprar um BYD King?',
+    'Onde estou gastando mais?',
     'Hoje ganhei R$ 250',
-    'Gastei R$ 40 no mercado',
-    'Tenho R$ 120 de internet para pagar',
-    'Tenho R$ 1.081,38 de fatura, R$ 481 é da parcela do meu celular, o resto são compras avulsas',
     'Paguei R$ 300 da fatura',
-    'Segunda trabalhei das 11:00 às 19:30 ganhando 12 por hora',
-    'Paguei a internet',
   ]
 
   const railItems = useMemo(
     () => [
-      { id: 'daily' as const, label: 'Painel diario', meta: `${summary?.recentEntries.length ?? 0} lancamentos`, ref: overviewRef },
-      { id: 'invoices' as const, label: 'Faturas', meta: `${summary?.openInvoices.length ?? 0} abertas`, ref: invoiceRef },
-      { id: 'pending' as const, label: 'Pendencias', meta: `${summary?.pendingEntries.length ?? 0} contas`, ref: pendingRef },
-      { id: 'recent' as const, label: 'Lancamentos', meta: `${summary?.recentEntries.length ?? 0} registros`, ref: recentRef },
+      { id: 'daily' as const, label: 'Painel diario', icon: <Grid2X2 size={18} />, ref: dailyRef },
+      { id: 'invoices' as const, label: 'Faturas', icon: <CreditCard size={18} />, ref: invoiceRef },
+      { id: 'pending' as const, label: 'Pendencias', icon: <ReceiptText size={18} />, ref: pendingRef },
+      { id: 'recent' as const, label: 'Lancamentos', icon: <ListChecks size={18} />, ref: recentRef },
+      { id: 'chat' as const, label: 'Bloco financeiro', icon: <MessageCircle size={18} />, ref: chatRef },
     ],
-    [summary],
+    [],
   )
+
+  const selectRail = (section: RailSection, target: RefObject<HTMLElement | null>) => {
+    setActiveSection(section)
+    window.requestAnimationFrame(() => target.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+  }
+
+  const useDraft = (draft: string) => {
+    setQuestion(draft)
+    window.setTimeout(() => inputRef.current?.focus(), 0)
+  }
 
   const ask = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -207,379 +155,381 @@ function App() {
     }
   }
 
-  const useDraft = (draft: string) => {
-    setQuestion(draft)
-    window.setTimeout(() => inputRef.current?.focus(), 0)
-  }
-
-  const selectRail = (section: RailSection, target: RefObject<HTMLElement | null>) => {
-    setActiveSection(section)
-    window.requestAnimationFrame(() => {
-      target.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    })
-  }
-
   return (
-    <main className="executive-shell">
-      <aside className="exec-rail" aria-label="Resumo lateral">
-        <div className="brand-block">
-          <span>FO</span>
+    <main className="soft-shell">
+      <aside className="soft-sidebar">
+        <div className="brand-card">
+          <span className="brand-mark">FO</span>
           <div>
             <strong>Finance OS</strong>
             <small>Controle pessoal</small>
           </div>
         </div>
 
-        <div className="rail-menu" aria-label="Seções">
-          <span className="active">Painel diário</span>
-          <span>Faturas</span>
-          <span>Pendências</span>
-          <span>Lançamentos</span>
-        </div>
-
-        <nav className="rail-actions" aria-label="Secoes">
+        <nav className="side-nav" aria-label="Secoes">
           {railItems.map((item) => (
             <button
               type="button"
               className={activeSection === item.id ? 'active' : ''}
-              aria-current={activeSection === item.id ? 'page' : undefined}
               onClick={() => selectRail(item.id, item.ref)}
+              aria-current={activeSection === item.id ? 'page' : undefined}
               key={item.id}
             >
+              {item.icon}
               <span>{item.label}</span>
-              <small>{item.meta}</small>
             </button>
           ))}
         </nav>
 
-        <div className="rail-balance">
-          <small>após pendências</small>
-          <strong className={(totals?.balanceAfterPending ?? 0) < 0 ? 'expense-text' : 'income-text'}>
-            {money(totals?.balanceAfterPending)}
-          </strong>
-          <span>{summary?.openInvoices.length ?? 0} fatura(s) abertas</span>
+        <div className="profile-card">
+          <span>FO</span>
+          <div>
+            <strong>Lukas Andrade</strong>
+            <small>lukas@email.com</small>
+          </div>
+          <ChevronDown size={18} />
+        </div>
+
+        <div className="sync-card">
+          <div>
+            <strong>{loading ? 'Sincronizando' : 'Sincronizado'}</strong>
+            <small>{loading ? 'Agora' : 'Ha 2 min'}</small>
+          </div>
+          {loading ? <Loader2 className="spin" size={20} /> : <CheckCircle2 size={22} />}
         </div>
       </aside>
 
-      <section className="exec-workspace">
-        <header className="exec-topbar">
-          <div>
-            <span>{formatMonth(summary?.month)}</span>
-            <h1>Controle financeiro diário</h1>
+      <section className="soft-workspace">
+        <header className="soft-topbar" ref={dailyRef}>
+          <div className="greeting">
+            <span className="sun-chip">
+              <Sun size={26} />
+            </span>
+            <div>
+              <h1>Bom dia, Lukas Andrade.</h1>
+              <p>Aqui esta o resumo da sua vida financeira.</p>
+            </div>
           </div>
-          <div className="top-actions">
-            <span className="sync-pill">{loading ? 'sincronizando' : 'online'}</span>
-            <button type="button" onClick={() => void loadSummary()} disabled={loading}>
-              {loading ? <Loader2 size={17} className="spin" /> : <RefreshCw size={17} />}
-              Atualizar
+          <div className="top-tools">
+            <button type="button" className="month-pill">
+              {formatMonth(summary?.month)}
+              <Calendar size={17} />
+            </button>
+            <button type="button" className="round-button" aria-label="Notificacoes">
+              <Bell size={19} />
+              <i />
             </button>
           </div>
         </header>
 
-        {error && <div className="status-line danger">{error}</div>}
+        {error && <div className="status-note">{error}</div>}
 
-        <section className={`executive-overview ${activeSection === 'daily' ? 'focused-section' : ''}`} aria-label="Resumo executivo" ref={overviewRef}>
-          <article className="primary-balance">
-            <div>
-              <span>saldo líquido</span>
-              <strong className={(totals?.netBalance ?? 0) < 0 ? 'expense-text' : ''}>
-                {money(totals?.netBalance)}
-              </strong>
-              <p>Entradas menos saídas já pagas neste mês.</p>
-            </div>
-            <Wallet size={28} />
-          </article>
-
-          <article className="pending-impact">
-            <div>
-              <span>impacto em aberto</span>
-              <strong>{money(totalPending)}</strong>
-              <p>Pendências e faturas que ainda faltam pagar.</p>
-            </div>
-            <Landmark size={28} />
-          </article>
-
-          <div className="metric-grid" aria-label="Indicadores principais">
-            {metrics.map((item) => (
-              <MetricTile item={item} key={item.label} />
-            ))}
-          </div>
+        <section className="top-card-grid">
+          <BalanceCard balance={afterPending} />
+          <RiskCard percent={riskPercent} label={riskLabel} />
+          <WorkCard hours={workHours} goal={workGoal} percent={workPercent} />
+          <AlertCard pendingTotal={pendingTotal} afterPending={afterPending} workPercent={workPercent} />
         </section>
 
-        <section className="exec-grid">
-          <section className="chat-panel">
-            <div className="section-title">
-              <div>
-                <span>entrada rápida</span>
-                <h2>Bloco financeiro</h2>
-              </div>
-              <MessageCircle size={19} />
-            </div>
-
-            <div className="chat-feed" aria-live="polite">
-              {messages.slice(-8).map((message, index) => (
-                <article className={message.author === 'Voce' ? 'from-user' : ''} key={`${message.author}-${index}-${message.text}`}>
-                  <span>{message.author}</span>
-                  <p>{message.text}</p>
-                </article>
-              ))}
-            </div>
-
-            <form className="chat-form" onSubmit={ask}>
-              <input
-                ref={inputRef}
-                value={question}
-                onChange={(event) => setQuestion(event.target.value)}
-                placeholder="Ex.: paguei R$ 300 da fatura"
-                disabled={busy}
-              />
-              <button type="submit" disabled={busy || !question.trim()} aria-label="Enviar">
-                {busy ? <Loader2 size={18} className="spin" /> : <Send size={18} />}
-              </button>
-            </form>
-
-            <div className="drafts" aria-label="Exemplos de comando">
-              {drafts.map((draft) => (
-                <button type="button" key={draft} onClick={() => useDraft(draft)}>
-                  {draft}
-                </button>
-              ))}
-            </div>
-          </section>
-
-          <section className="summary-panel">
-            <div className="section-title">
-              <div>
-                <span>fechamento</span>
-                <h2>Posição atual</h2>
-              </div>
-              <Wallet size={19} />
-            </div>
-            <div className="closing-number">
-              <small>saldo líquido</small>
-              <strong className={(totals?.netBalance ?? 0) < 0 ? 'expense-text' : ''}>{money(totals?.netBalance)}</strong>
-            </div>
-            <div className="closing-row">
-              <span>Pendências totais</span>
-              <b>{money(totalPending)}</b>
-            </div>
-            <div className="closing-row strong">
-              <span>Depois de pagar tudo</span>
-              <b className={(totals?.balanceAfterPending ?? 0) < 0 ? 'expense-text' : 'income-text'}>
-                {money(totals?.balanceAfterPending)}
-              </b>
-            </div>
-          </section>
-
-          <WorkWeekPanel
-            days={summary?.workWeek?.days}
-            sessions={summary?.workWeek?.sessions ?? []}
-            hours={summary?.workWeek?.hours ?? 0}
-            gross={summary?.workWeek?.gross ?? 0}
-            weekStart={summary?.workWeek?.weekStart}
-            weekEnd={summary?.workWeek?.weekEnd}
-          />
-
-          <ListPanel
-            className="pending-panel"
-            sectionRef={pendingRef}
-            focused={activeSection === 'pending'}
-            title="Contas pendentes"
-            eyebrow="a pagar"
-            icon={<FileClock size={19} />}
-            empty="Nenhuma conta pendente."
-            entries={summary?.pendingEntries ?? []}
-          />
-
+        <section className="middle-card-grid">
           <InvoicePanel invoices={summary?.openInvoices ?? []} sectionRef={invoiceRef} focused={activeSection === 'invoices'} />
-
-          <ListPanel
-            className="recent-panel"
-            sectionRef={recentRef}
-            focused={activeSection === 'recent'}
-            title="Últimos lançamentos"
-            eyebrow="histórico"
-            icon={<ListChecks size={19} />}
-            empty="Nenhum lançamento ainda."
-            entries={summary?.recentEntries ?? []}
-            recent
-          />
+          <PendingPanel entries={summary?.pendingEntries ?? []} sectionRef={pendingRef} focused={activeSection === 'pending'} />
+          <RecentPanel entries={summary?.recentEntries ?? []} sectionRef={recentRef} focused={activeSection === 'recent'} />
         </section>
+
+        <ChatPanel
+          sectionRef={chatRef}
+          focused={activeSection === 'chat'}
+          messages={messages}
+          question={question}
+          setQuestion={setQuestion}
+          busy={busy}
+          inputRef={inputRef}
+          ask={ask}
+          drafts={drafts}
+          useDraft={useDraft}
+        />
       </section>
     </main>
   )
 }
 
-function MetricTile({ item }: { item: MetricItem }) {
+function BalanceCard({ balance }: { balance: number }) {
   return (
-    <article className={`metric ${item.tone}`}>
-      <span>{item.icon}</span>
-      <div>
-        <small>{item.label}</small>
-        <strong>{item.value}</strong>
-        <p>{item.detail}</p>
+    <article className="soft-card balance-card">
+      <CardHeader title="Saldo apos pendencias" icon={<Eye size={18} />} />
+      <strong className={balance < 0 ? 'danger-text' : 'success-text'}>{money(balance)}</strong>
+      <span>Disponivel para uso</span>
+      <p className={balance < 0 ? 'danger-text' : 'success-text'}>▲ 8,3% vs. mes anterior</p>
+      <svg className="line-graph" viewBox="0 0 240 82" aria-hidden="true">
+        <path d="M4 62 C22 58 22 42 43 48 C62 54 65 23 86 28 C109 34 103 66 127 54 C149 43 146 22 168 27 C189 31 187 7 206 18 C222 27 224 42 238 36" />
+      </svg>
+    </article>
+  )
+}
+
+function RiskCard({ percent, label }: { percent: number; label: string }) {
+  return (
+    <article className="soft-card risk-card">
+      <CardHeader title="Risco de caixa" icon={<ShieldCheck size={18} />} />
+      <div className="gauge" style={{ '--risk': `${percent}%` } as CSSProperties}>
+        <strong>{percent}%</strong>
+        <span>{label}</span>
+      </div>
+      <p>Sua saude financeira esta estavel.</p>
+    </article>
+  )
+}
+
+function WorkCard({ hours, goal, percent }: { hours: number; goal: number; percent: number }) {
+  return (
+    <article className="soft-card work-card">
+      <CardHeader title="Horas da semana" icon={<Clock3 size={18} />} />
+      <strong>{formatWorkHours(hours)}</strong>
+      <span>Meta: {goal}h</span>
+      <div className="soft-progress">
+        <i style={{ width: `${percent}%` }} />
+      </div>
+      <div className="split-line">
+        <span>Trabalhadas</span>
+        <b>{percent}%</b>
       </div>
     </article>
   )
 }
 
-function WorkWeekPanel({
-  days,
-  sessions,
-  hours,
-  gross,
-  weekStart,
-  weekEnd,
+function AlertCard({
+  pendingTotal,
+  afterPending,
+  workPercent,
 }: {
-  days?: SimpleWorkDay[]
-  sessions: SimpleWorkSession[]
-  hours: number
-  gross: number
-  weekStart?: string
-  weekEnd?: string
+  pendingTotal: number
+  afterPending: number
+  workPercent: number
 }) {
-  const workDays = days?.length ? days.slice(0, 5) : buildWorkDays(weekStart, sessions)
+  const alerts = [
+    {
+      tone: 'red',
+      title: pendingTotal > 0 ? 'Compromissos futuros altos' : 'Sem compromissos altos',
+      text: pendingTotal > 0 ? `Voce possui ${money(pendingTotal)} em aberto.` : 'Nenhuma pendencia pesada agora.',
+    },
+    {
+      tone: 'amber',
+      title: afterPending < 0 ? 'Saldo apos pendencias negativo' : 'Gasto sob controle',
+      text: afterPending < 0 ? 'Evite assumir novas parcelas ate regularizar.' : 'Seu saldo ainda suporta as pendencias.',
+    },
+    {
+      tone: 'green',
+      title: workPercent >= 80 ? 'Meta em dia' : 'Horas em andamento',
+      text: workPercent >= 80 ? 'Voce esta no caminho certo esta semana.' : 'Ainda faltam horas para bater sua meta.',
+    },
+  ]
 
   return (
-    <section className="work-week-panel">
-      <div className="section-title">
-        <div>
-          <span>banco de horas</span>
-          <h2>Horas da semana</h2>
-        </div>
-        <Clock3 size={19} />
-      </div>
-      <div className="work-total">
-        <div>
-          <strong>{formatWorkHours(hours)}</strong>
-          <small>{weekStart && weekEnd ? `${formatDate(weekStart)} ate ${formatDate(weekEnd)}` : 'semana atual'}</small>
-        </div>
-        <span>{money(gross)} bruto</span>
-      </div>
-      <div className="work-list">
-        {workDays.map((day, index) => (
-          <article className={day.status === 'vazio' ? 'empty-day' : ''} key={day.date}>
+    <article className="soft-card alert-card">
+      <CardHeader title="Alertas" icon={<Bell size={18} />} />
+      <div className="alert-list">
+        {alerts.map((alert) => (
+          <div className="alert-item" data-tone={alert.tone} key={alert.title}>
+            <i>!</i>
             <div>
-              <strong>{workdayNames[index] ?? day.weekday}</strong>
-              <span>
-                {formatDate(day.date)} · {day.sessions.length
-                  ? day.sessions.map((session) => `${session.start_time ?? 'manual'}${session.end_time ? `-${session.end_time}` : ''}`).join(', ')
-                  : 'sem jornada'}
-              </span>
+              <strong>{alert.title}</strong>
+              <span>{alert.text}</span>
             </div>
-            <b>{formatWorkHours(day.hours)}</b>
-          </article>
+          </div>
         ))}
       </div>
-    </section>
-  )
-}
-
-function ListPanel({
-  className = '',
-  sectionRef,
-  focused = false,
-  title,
-  eyebrow,
-  icon,
-  empty,
-  entries,
-  recent = false,
-}: {
-  className?: string
-  sectionRef?: RefObject<HTMLElement | null>
-  focused?: boolean
-  title: string
-  eyebrow: string
-  icon: ReactNode
-  empty: string
-  entries: SimpleEntry[]
-  recent?: boolean
-}) {
-  return (
-    <section className={`list-panel ${className} ${focused ? 'focused-panel' : ''}`} ref={sectionRef}>
-      <div className="section-title">
-        <div>
-          <span>{eyebrow}</span>
-          <h2>{title}</h2>
-        </div>
-        {icon}
-      </div>
-      <div className="entry-list">
-        {entries.map((entry) => (
-          <article key={`${entry.kind}-${entry.id}-${entry.created_at ?? entry.date}`}>
-            <div>
-              <strong>{entry.description}</strong>
-              <span>{formatDate(entry.date)} · {entry.kind} · {entry.status}</span>
-            </div>
-            <b className={entry.kind === 'receita' ? 'income-text' : entry.kind === 'fatura' ? '' : 'expense-text'}>
-              {entry.kind === 'receita' ? '+' : recent && entry.kind === 'fatura' ? '' : '-'}{money(entry.amount)}
-            </b>
-          </article>
-        ))}
-        {!entries.length && (
-          <article className="empty">
-            <CheckCircle2 size={18} />
-            <span>{empty}</span>
-          </article>
-        )}
-      </div>
-    </section>
+      <button type="button" className="ghost-action">Ver todos os alertas <span>→</span></button>
+    </article>
   )
 }
 
 function InvoicePanel({
   invoices,
   sectionRef,
-  focused = false,
+  focused,
 }: {
   invoices: SimpleInvoice[]
-  sectionRef?: RefObject<HTMLElement | null>
-  focused?: boolean
+  sectionRef: RefObject<HTMLElement | null>
+  focused: boolean
+}) {
+  const invoice = invoices[0]
+  const ratio = invoice?.total_amount ? Math.min(100, (invoice.paid_amount / invoice.total_amount) * 100) : 0
+
+  return (
+    <section className={`soft-card invoice-card ${focused ? 'focused-card' : ''}`} ref={sectionRef}>
+      <CardHeader title="Fatura aberta" icon={<MoreHorizontal size={18} />} />
+      {invoice ? (
+        <>
+          <div className="invoice-box">
+            <span className="mini-icon"><CreditCard size={20} /></span>
+            <div>
+              <strong>{invoice.name}</strong>
+              <small>Cartao de credito</small>
+            </div>
+            <div className="invoice-date">
+              <span>Vencimento</span>
+              <b>{invoice.due_date ? formatDate(invoice.due_date) : 'Sem data'}</b>
+            </div>
+          </div>
+          <div className="invoice-money">
+            <span><small>Valor total</small><b className="danger-text">{money(invoice.total_amount)}</b></span>
+            <span><small>Pago</small><b className="success-text">{money(invoice.paid_amount)}</b></span>
+            <span><small>Restante</small><b>{money(invoice.remaining_amount)}</b></span>
+          </div>
+          <div className="soft-progress"><i style={{ width: `${ratio}%` }} /></div>
+        </>
+      ) : (
+        <EmptyState text="Nenhuma fatura aberta." />
+      )}
+      <button type="button" className="ghost-action">Ver faturas <span>→</span></button>
+    </section>
+  )
+}
+
+function PendingPanel({
+  entries,
+  sectionRef,
+  focused,
+}: {
+  entries: SimpleEntry[]
+  sectionRef: RefObject<HTMLElement | null>
+  focused: boolean
 }) {
   return (
-    <section className={`list-panel invoice-panel ${focused ? 'focused-panel' : ''}`} ref={sectionRef}>
-      <div className="section-title">
-        <div>
-          <span>cartão</span>
-          <h2>Faturas abertas</h2>
-        </div>
-        <CreditCard size={19} />
-      </div>
-      <div className="invoice-list">
-        {invoices.map((invoice) => {
-          const ratio = invoice.total_amount ? Math.min(100, (invoice.paid_amount / invoice.total_amount) * 100) : 0
-          return (
-            <article key={invoice.id}>
-              <div className="invoice-head">
-                <div>
-                  <strong>{invoice.name}</strong>
-                  <span>{invoice.status} · pago {money(invoice.paid_amount)}</span>
-                </div>
-                <b>{money(invoice.remaining_amount)}</b>
-              </div>
-              <div className="progress">
-                <i style={{ width: `${ratio}%` }} />
-              </div>
-              <div className="invoice-items">
-                {invoice.items.map((item) => (
-                  <span key={item.id}>
-                    {item.description}
-                    <b>{money(item.amount)}</b>
-                  </span>
-                ))}
-              </div>
-            </article>
-          )
-        })}
-        {!invoices.length && (
-          <article className="empty">
-            <CheckCircle2 size={18} />
-            <span>Nenhuma fatura aberta.</span>
+    <section className={`soft-card pending-card ${focused ? 'focused-card' : ''}`} ref={sectionRef}>
+      <CardHeader title="Pendencias" icon={<MoreHorizontal size={18} />} />
+      <div className="compact-list">
+        {entries.slice(0, 3).map((entry, index) => (
+          <article key={entry.id}>
+            <span className="mini-icon" data-kind={index % 3}><FileClock size={17} /></span>
+            <div>
+              <strong>{entry.description}</strong>
+              <small>Venc. {formatDate(entry.date)}</small>
+            </div>
+            <b className="danger-text">{money(entry.amount)}</b>
           </article>
-        )}
+        ))}
+        {!entries.length && <EmptyState text="Nenhuma pendencia." />}
       </div>
+      <button type="button" className="ghost-action">Ver pendencias <span>→</span></button>
     </section>
+  )
+}
+
+function RecentPanel({
+  entries,
+  sectionRef,
+  focused,
+}: {
+  entries: SimpleEntry[]
+  sectionRef: RefObject<HTMLElement | null>
+  focused: boolean
+}) {
+  return (
+    <section className={`soft-card recent-card ${focused ? 'focused-card' : ''}`} ref={sectionRef}>
+      <CardHeader title="Ultimos lancamentos" icon={<MoreHorizontal size={18} />} />
+      <div className="compact-list">
+        {entries.slice(0, 4).map((entry) => (
+          <article key={`${entry.kind}-${entry.id}-${entry.created_at ?? entry.date}`}>
+            <span className="mini-icon" data-kind={entry.kind === 'receita' ? 0 : 1}>
+              {entry.kind === 'receita' ? <Wallet size={17} /> : <Zap size={17} />}
+            </span>
+            <div>
+              <strong>{entry.description}</strong>
+              <small>{formatDate(entry.date)} · {entry.status}</small>
+            </div>
+            <b className={entry.kind === 'receita' ? 'success-text' : 'danger-text'}>
+              {entry.kind === 'receita' ? '+' : '-'} {money(entry.amount)}
+            </b>
+          </article>
+        ))}
+        {!entries.length && <EmptyState text="Nenhum lancamento ainda." />}
+      </div>
+      <button type="button" className="ghost-action">Ver lancamentos <span>→</span></button>
+    </section>
+  )
+}
+
+function ChatPanel({
+  sectionRef,
+  focused,
+  messages,
+  question,
+  setQuestion,
+  busy,
+  inputRef,
+  ask,
+  drafts,
+  useDraft,
+}: {
+  sectionRef: RefObject<HTMLElement | null>
+  focused: boolean
+  messages: ChatMessage[]
+  question: string
+  setQuestion: (value: string) => void
+  busy: boolean
+  inputRef: RefObject<HTMLInputElement | null>
+  ask: (event: FormEvent<HTMLFormElement>) => void
+  drafts: string[]
+  useDraft: (draft: string) => void
+}) {
+  return (
+    <section className={`soft-card chat-dock ${focused ? 'focused-card' : ''}`} ref={sectionRef}>
+      <div className="chat-heading">
+        <div>
+          <h2>Bloco financeiro</h2>
+          <p>Seu assistente inteligente para decisoes financeiras melhores.</p>
+        </div>
+        <div className="quick-drafts">
+          {drafts.slice(0, 3).map((draft) => (
+            <button type="button" onClick={() => useDraft(draft)} key={draft}>
+              {draft}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="chat-preview">
+        {messages.slice(-2).map((message, index) => (
+          <article className={message.author === 'Voce' ? 'from-user' : ''} key={`${message.text}-${index}`}>
+            <small>{message.author}</small>
+            <p>{message.text}</p>
+          </article>
+        ))}
+      </div>
+
+      <form className="soft-input" onSubmit={ask}>
+        <input
+          ref={inputRef}
+          value={question}
+          onChange={(event) => setQuestion(event.target.value)}
+          placeholder="Pergunte ao Finance OS..."
+          disabled={busy}
+        />
+        <button type="submit" disabled={busy || !question.trim()} aria-label="Enviar">
+          {busy ? <Loader2 className="spin" size={18} /> : <Send size={18} />}
+        </button>
+      </form>
+    </section>
+  )
+}
+
+function CardHeader({ title, icon }: { title: string; icon: ReactNode }) {
+  return (
+    <div className="card-header">
+      <h2>{title}</h2>
+      <span>{icon}</span>
+    </div>
+  )
+}
+
+function EmptyState({ text }: { text: string }) {
+  return (
+    <div className="empty-state">
+      <CheckCircle2 size={18} />
+      <span>{text}</span>
+    </div>
   )
 }
 
