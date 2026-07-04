@@ -1,20 +1,28 @@
-import type { FormEvent } from 'react'
+import type { CSSProperties, FormEvent } from 'react'
 import type { CategoryRule, Commitment, FinanceSummary, ImportMapping, ImportPreview, Transaction, WorkSession } from './types'
 import {
+  AlertTriangle,
+  BarChart3,
   Bell,
   Bot,
-  CheckCircle2,
+  CalendarDays,
+  ChevronDown,
+  ChevronRight,
   CircleDollarSign,
   Clock3,
+  CreditCard,
   Database,
-  Home,
-  MessageCircle,
+  Download,
+  Goal,
+  Grid2X2,
+  Landmark,
   PieChart,
+  Plus,
   RefreshCw,
   RotateCcw,
   Save,
-  Search,
   Send,
+  Settings,
   ShieldAlert,
   SlidersHorizontal,
   Sparkles,
@@ -24,6 +32,7 @@ import {
   Trash2,
   Upload,
   WalletCards,
+  Zap,
 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
@@ -48,13 +57,16 @@ type ChatMessage = {
 }
 
 const navItems = [
-  { label: 'Hoje', icon: <Home size={19} /> },
-  { label: 'Receitas', icon: <CircleDollarSign size={19} /> },
-  { label: 'Fluxo', icon: <TrendingUp size={19} /> },
-  { label: 'Categorias', icon: <PieChart size={19} /> },
-  { label: 'Horas', icon: <Clock3 size={19} /> },
-  { label: 'Regras', icon: <Tags size={19} /> },
-  { label: 'Dados', icon: <Database size={19} /> },
+  { label: 'Painel financeiro', icon: <Grid2X2 size={18} /> },
+  { label: 'Transacoes', icon: <SlidersHorizontal size={18} /> },
+  { label: 'Receitas & Despesas', icon: <CircleDollarSign size={18} /> },
+  { label: 'Metas', icon: <Goal size={18} /> },
+  { label: 'Banco de horas', icon: <Clock3 size={18} /> },
+  { label: 'Planejamento', icon: <CalendarDays size={18} /> },
+  { label: 'Relatorios', icon: <BarChart3 size={18} /> },
+  { label: 'Categorias', icon: <Tags size={18} /> },
+  { label: 'Importacoes', icon: <Download size={18} /> },
+  { label: 'Configuracoes', icon: <Settings size={18} /> },
 ]
 
 const fallbackMessages: ChatMessage[] = [
@@ -116,9 +128,9 @@ const IMPORT_FIELDS: Array<{ key: keyof ImportMapping; label: string; required?:
 
 function App() {
   const [summary, setSummary] = useState<FinanceSummary | null>(null)
-  const [messages, setMessages] = useState<ChatMessage[]>(fallbackMessages)
+  const [, setMessages] = useState<ChatMessage[]>(fallbackMessages)
   const [question, setQuestion] = useState('')
-  const [activeNav, setActiveNav] = useState('Hoje')
+  const [activeNav, setActiveNav] = useState('Painel financeiro')
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -221,58 +233,10 @@ function App() {
   }
 
   useEffect(() => {
-    if (activeNav === 'Regras') void loadRulesData()
-    if (activeNav === 'Horas') void loadWorkData()
-    if (activeNav === 'Receitas') void loadMoneyData()
+    if (activeNav === 'Categorias' || activeNav === 'Configuracoes') void loadRulesData()
+    if (activeNav === 'Banco de horas') void loadWorkData()
+    if (activeNav === 'Receitas & Despesas' || activeNav === 'Transacoes') void loadMoneyData()
   }, [activeNav])
-
-  const decisions = useMemo(() => {
-    return (summary?.actionPlan ?? []).slice(0, 3).map((item) => ({
-      title: item.title,
-      detail: item.detail,
-      state: item.priority,
-    }))
-  }, [summary])
-
-  const cards = useMemo(
-    () => [
-      {
-        label: 'Saldo atual',
-        value: money(summary?.kpis.balance),
-        hint: loading ? 'sincronizando' : 'dados do backend',
-        icon: <CircleDollarSign />,
-      },
-      {
-        label: 'Queima diaria',
-        value: money(summary?.kpis.dailyBurn),
-        hint: 'media projetada',
-        icon: <TrendingDown />,
-      },
-      {
-        label: 'Reserva',
-        value: `${summary?.kpis.savingsRate ?? 0}%`,
-        hint: summary?.kpis.healthLabel ?? 'aguardando dados',
-        icon: <CheckCircle2 />,
-      },
-    ],
-    [loading, summary],
-  )
-
-  const riskRows = useMemo(() => {
-    const budgets = summary?.budgetStatus ?? []
-    if (!budgets.length) {
-      return [
-        { name: 'Hoje', value: summary?.kpis.cashRisk ?? 'carregando', width: '34%' },
-        { name: '30 dias', value: summary?.kpis.riskLevel ?? 'ok', width: '52%' },
-        { name: 'Score', value: `${summary?.kpis.healthScore ?? 0}/100`, width: '62%' },
-      ]
-    }
-    return budgets.slice(0, 3).map((budget) => ({
-      name: budget.category,
-      value: `${budget.projectedRatio}%`,
-      width: `${Math.min(Math.max(budget.projectedRatio, 8), 100)}%`,
-    }))
-  }, [summary])
 
   const categoryOptions = useMemo(() => {
     const values = new Set(BASE_CATEGORIES)
@@ -333,11 +297,44 @@ function App() {
     }
   }, [commitments, transactions])
 
-  const todayLabel = new Intl.DateTimeFormat('pt-BR', {
-    weekday: 'long',
-    day: '2-digit',
-    month: 'short',
-  }).format(new Date())
+  const dashboardAlerts = useMemo(() => {
+    if (summary?.alerts.length) {
+      return summary.alerts.slice(0, 3).map((alert) => ({
+        tone: alert.severity === 'high' ? 'danger' : alert.severity === 'medium' ? 'warning' : 'info',
+        title: alert.title,
+        message: alert.message,
+      }))
+    }
+    return [
+      {
+        tone: 'info',
+        title: 'Sem alertas criticos',
+        message: 'Quando houver dados suficientes, os riscos aparecem aqui.',
+      },
+    ]
+  }, [summary])
+
+  const flowBars = useMemo(() => {
+    const series = summary?.monthlySeries.slice(-10) ?? []
+    if (series.length) {
+      return series.map((point) => ({
+        height: Math.max(14, Math.min(70, Math.abs(point.net) / 120)),
+        negative: point.net < 0,
+      }))
+    }
+    return [16, 22, 19, 28, 24, 34, 21, 30, 38, 44].map((height) => ({ height, negative: false }))
+  }, [summary])
+
+  const monthBars = useMemo(() => {
+    const seed = [9, 14, 8, 22, 11, 18, 7, 10, 28, 12, 5, 9, 16, 7, 13, 8, 24, 20, 11, 7, 14, 17, 8, 10, 22, 15, 9, 6, 13, 19, 31]
+    return seed.map((height, index) => ({
+      height,
+      negative: index % 5 === 1 || index % 7 === 0,
+    }))
+  }, [])
+
+  const goalProgress = Math.max(0, Math.min(100, summary?.goals[0]?.progress ?? 0))
+  const healthScore = Math.max(0, Math.min(100, summary?.kpis.healthScore ?? 0))
 
   const handleAsk = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -350,8 +347,8 @@ function App() {
       const reply = await askAgent(text)
       setMessages((current) => [...current, { author: 'Finance OS', text: reply.answer }])
       void loadDashboard()
-      if (reply.intent?.includes('work_session') || activeNav === 'Horas') void loadWorkData()
-      if (reply.intent === 'remember_commitment' || activeNav === 'Receitas') void loadMoneyData()
+      if (reply.intent?.includes('work_session') || activeNav === 'Banco de horas') void loadWorkData()
+      if (reply.intent === 'remember_commitment' || activeNav === 'Receitas & Despesas' || activeNav === 'Transacoes') void loadMoneyData()
     } catch (err) {
       setMessages((current) => [
         ...current,
@@ -386,7 +383,7 @@ function App() {
 
   const handleFileSelected = async (file: File | undefined) => {
     if (!file) return
-    if (activeNav === 'Dados') {
+    if (activeNav === 'Importacoes') {
       await handleImportPreview(file)
       return
     }
@@ -557,15 +554,15 @@ function App() {
       <section className="workspace" id="inicio">
         <header className="workspace-top glass-sheet">
           <div>
-            <span>{todayLabel}</span>
-            <strong>Finance OS</strong>
+            <span>Visao geral da sua vida financeira</span>
+            <strong>Painel financeiro</strong>
           </div>
           <div className="top-tools">
-            <button type="button" onClick={() => void loadDashboard()}>
-              <RefreshCw size={16} /> Atualizar
+            <button type="button" className="month-button" onClick={() => void loadDashboard()}>
+              <CalendarDays size={16} /> Julho de 2026 <ChevronDown size={15} />
             </button>
-            <button type="button" onClick={() => fileInputRef.current?.click()}>
-              <Upload size={16} /> Importar extrato
+            <button type="button" className="icon-button" aria-label="Notificacoes" onClick={() => void loadDashboard()}>
+              <Bell size={16} />
             </button>
             <input
               ref={fileInputRef}
@@ -578,7 +575,7 @@ function App() {
           </div>
         </header>
 
-        {activeNav === 'Receitas' ? (
+        {activeNav === 'Receitas & Despesas' || activeNav === 'Transacoes' ? (
           <main className="money-grid">
             <section className="money-hero glass-panel">
               <div>
@@ -682,7 +679,7 @@ function App() {
               </div>
             </section>
           </main>
-        ) : activeNav === 'Regras' ? (
+        ) : activeNav === 'Categorias' || activeNav === 'Configuracoes' ? (
           <main className="rules-grid">
             <section className="rules-hero glass-panel">
               <div>
@@ -832,7 +829,7 @@ function App() {
               </div>
             </section>
           </main>
-        ) : activeNav === 'Horas' ? (
+        ) : activeNav === 'Banco de horas' ? (
           <main className="work-grid">
             <section className="work-hero glass-panel">
               <div>
@@ -979,7 +976,7 @@ function App() {
               </div>
             </section>
           </main>
-        ) : activeNav === 'Dados' ? (
+        ) : activeNav === 'Importacoes' ? (
           <main className="data-grid">
             <section className="data-hero glass-panel">
               <div>
@@ -1078,151 +1075,196 @@ function App() {
           </main>
         ) : (
         <main className="personal-grid">
-          <section className="assistant-pane glass-panel" aria-label="Agente financeiro pessoal">
-            <div className="assistant-head">
-              <span className="agent-avatar"><Bot size={22} /></span>
+          <section className="balance-card glass-panel">
+            <div className="panel-title">
               <div>
-                <h1>Painel financeiro</h1>
-                <p>
-                  {error
-                    ? 'Backend indisponivel. Verifique Render e variaveis.'
-                    : summary
-                      ? summary.recentTransactions.length
-                        ? `Revisei ${summary.recentTransactions.length} lancamentos recentes e ${summary.actionPlan.length} acoes.`
-                        : 'Sem dados pessoais ainda. Registre receitas e despesas pelo chat.'
-                      : 'Conectando ao backend financeiro...'}
-                </p>
+                <h2>Saldo livre</h2>
+                <span>{loading ? 'Sincronizando' : 'Atualizado agora'}</span>
               </div>
+              <button type="button" className="icon-button soft" onClick={() => void loadDashboard()} aria-label="Atualizar saldo">
+                <RefreshCw size={16} />
+              </button>
+            </div>
+            <strong>{money(summary?.kpis.balance)}</strong>
+            <p>Disponivel para uso</p>
+            <small className={summary && summary.kpis.net < 0 ? 'delta down' : 'delta'}>{money(summary?.kpis.net)} no mes</small>
+            <div className="balance-chart" aria-label="Fluxo recente">
+              {flowBars.map((bar, index) => (
+                <i key={`${bar.height}-${index}`} className={bar.negative ? 'negative' : ''} style={{ height: `${bar.height}px` }} />
+              ))}
+            </div>
+            <div className="chart-scale">
+              <span>30 Jun</span>
+              <span>Hoje</span>
+            </div>
+          </section>
+
+          <section className="assistant-pane glass-panel" aria-label="IA financeira">
+            <div className="panel-title">
+              <div>
+                <h2>IA financeira</h2>
+                <span>Seu assistente financeiro pessoal</span>
+              </div>
+              <button type="button" className="icon-button soft" onClick={() => void loadDashboard()} aria-label="Sincronizar IA">
+                <RefreshCw size={16} />
+              </button>
             </div>
 
-            <div className="status-row">
-              <span><Sparkles size={15} /> {summary?.insights.length ?? 0} sinais</span>
-              <span><ShieldAlert size={15} /> risco {summary?.kpis.cashRisk ?? '...'}</span>
-              <span><Clock3 size={15} /> {loading || busy ? 'sincronizando' : 'online'}</span>
+            <div className="assistant-orb" aria-hidden="true">
+              <Bot size={42} />
             </div>
 
-            <div className="chat-window">
-              {messages.map((message, index) => (
-                <article className={message.author === 'Voce' ? 'message user' : 'message agent'} key={`${message.text}-${index}`}>
-                  <span>{message.author}</span>
-                  <p>{message.text}</p>
-                </article>
+            <div className="quick-prompts">
+              {[
+                ['Qual meu saldo projetado ate o fim do mes?', <Landmark size={15} />],
+                ['Posso comprar um celular de R$ 2.400 em 10x?', <CreditCard size={15} />],
+                ['Onde estou gastando mais este mes?', <PieChart size={15} />],
+                ['Qual o melhor plano para comprar um BYD King?', <Goal size={15} />],
+              ].map(([label, icon]) => (
+                <button type="button" key={String(label)} onClick={() => setQuestion(String(label))}>
+                  <span>{icon}</span>
+                  {label}
+                  <ChevronRight size={15} />
+                </button>
               ))}
             </div>
 
             <form className="ask-box" onSubmit={handleAsk}>
-              <label htmlFor="ask-agent">Perguntar ao financeiro</label>
               <div>
-                <Search size={18} />
                 <input
                   id="ask-agent"
                   type="text"
                   value={question}
-                  placeholder="Ex.: hoje ganhei R$250"
+                  placeholder="Pergunte algo..."
                   onChange={(event) => setQuestion(event.target.value)}
                 />
                 <button type="submit" aria-label="Enviar pergunta" disabled={busy}>
-                  <Send size={18} />
+                  <Send size={17} />
                 </button>
               </div>
             </form>
           </section>
 
-          <aside className="right-column">
-            <section className="balance-card glass-panel">
-              <div className="panel-title">
-                <h2>Resumo</h2>
-                <button type="button" onClick={() => void loadDashboard()}><SlidersHorizontal size={15} /> Recarregar</button>
+          <section className="hours-card glass-panel">
+            <div className="panel-title">
+              <div>
+                <h2>Banco de horas</h2>
+                <span>Saldo de horas</span>
               </div>
-              <strong>{money(summary?.kpis.balance)}</strong>
-              <p>{summary?.recentTransactions.length ? 'saldo atual pelos seus lancamentos' : 'sem lancamentos pessoais ainda'}</p>
-              <div className="mini-line" aria-label="Fluxo projetado">
-                {(summary?.monthlySeries.slice(-6) ?? []).map((point) => (
-                  <i key={point.month} style={{ height: `${Math.max(18, Math.min(58, Math.abs(point.net) / 180))}px` }} />
-                ))}
-                {!summary && [24, 35, 28, 44, 38, 52].map((height) => <i key={height} style={{ height }} />)}
-              </div>
-            </section>
+              <Clock3 size={18} />
+            </div>
+            <strong>{workTotals.hours.toFixed(2)}h</strong>
+            <p>Horas trabalhadas registradas</p>
+            <div className="progress-line"><i style={{ width: `${Math.min(100, Math.max(6, workTotals.hours))}%` }} /></div>
+            <small>{workTotals.days} dias salvos</small>
+          </section>
 
-            <section className="decision-card glass-panel">
-              <div className="panel-title">
-                <h2>Decisoes</h2>
-                <span>{activeNav.toLowerCase()}</span>
-              </div>
-              <div className="decision-list">
-                {decisions.map((item) => (
-                  <article key={item.title}>
-                    <div>
-                      <strong>{item.title}</strong>
-                      <p>{item.detail}</p>
-                    </div>
-                    <span>{item.state}</span>
-                  </article>
-                ))}
-                {!decisions.length && (
-                  <article>
-                    <div>
-                      <strong>Sem dados ainda</strong>
-                      <p>Registre receita ou despesa pelo chat para gerar analise.</p>
-                    </div>
-                    <span>vazio</span>
-                  </article>
-                )}
-              </div>
-            </section>
-          </aside>
+          <section className="alerts-panel glass-panel">
+            <div className="panel-title">
+              <h2>Alertas</h2>
+              <AlertTriangle size={18} />
+            </div>
+            <div className="alert-list">
+              {dashboardAlerts.map((alert) => (
+                <article className={alert.tone} key={alert.title}>
+                  <strong>{alert.title}</strong>
+                  <p>{alert.message}</p>
+                </article>
+              ))}
+            </div>
+            <button type="button" className="ghost-row">Ver todos os alertas <ChevronRight size={15} /></button>
+          </section>
 
           <section className="glass-panel risk-panel">
             <div className="panel-title">
               <h2>Risco de caixa</h2>
-              <span>{summary?.kpis.riskLevel ?? 'sync'}</span>
+              <ShieldAlert size={18} />
             </div>
-            <div className="risk-list">
-              {riskRows.map((row) => (
-                <div className="risk-row" key={row.name}>
-                  <span>{row.name}</span>
-                  <div><i style={{ width: row.width }} /></div>
-                  <b>{row.value}</b>
-                </div>
-              ))}
+            <div className="risk-gauge" style={{ '--score': `${healthScore}%` } as CSSProperties}>
+              <strong>{healthScore}%</strong>
+              <span>{summary?.kpis.cashRisk ?? 'Sem dados'}</span>
             </div>
+            <p>Sua saude financeira aparece aqui depois dos lancamentos.</p>
           </section>
 
-          <section className="card-strip">
-            {cards.map((card) => (
-              <article className="metric-card glass-panel" key={card.label}>
-                <span>{card.icon}</span>
-                <div>
-                  <p>{card.label}</p>
-                  <strong>{card.value}</strong>
-                  <small>{card.hint}</small>
-                </div>
-              </article>
-            ))}
-          </section>
-
-          <section className="glass-panel notes-panel">
+          <section className="plan-card glass-panel">
             <div className="panel-title">
-              <h2>Livro caixa</h2>
-              <MessageCircle size={17} />
+              <div>
+                <h2>Plano estrategico</h2>
+                <span>{summary?.goals[0]?.name ?? 'Meta principal'}</span>
+              </div>
+              <TrendingUp size={18} />
             </div>
-            <p>
-              {summary?.recentTransactions.length
-                ? (summary?.insights[0]?.message ?? 'Dados pessoais carregados.')
-                : (error || 'Sem dados pessoais. Ex.: hoje ganhei R$250, gastei R$80 no mercado.')}
-            </p>
-            <div className="ledger-list" aria-label="Lancamentos recentes">
+            <div className="plan-body">
+              <div className="plan-ring" style={{ '--score': `${goalProgress}%` } as CSSProperties}>
+                <strong>{Math.round(goalProgress)}%</strong>
+              </div>
+              <div>
+                <span>Guardado</span>
+                <strong>{money(summary?.goals[0]?.current_amount ?? 0)}</strong>
+                <p>de {money(summary?.goals[0]?.target_amount ?? 0)}</p>
+              </div>
+            </div>
+            <small>{summary?.goals[0]?.monthlyRequired ? `${money(summary.goals[0].monthlyRequired)} por mes` : 'Cadastre uma meta para calcular prazo.'}</small>
+          </section>
+
+          <section className="transactions-panel glass-panel">
+            <div className="panel-title">
+              <h2>Transacoes recentes</h2>
+              <button type="button" onClick={() => setActiveNav('Transacoes')}>Ver todas</button>
+            </div>
+            <div className="dashboard-table">
+              <div>
+                <span>Data</span>
+                <span>Descricao</span>
+                <span>Categoria</span>
+                <span>Tipo</span>
+                <span>Valor</span>
+                <span>Saldo</span>
+              </div>
               {(summary?.recentTransactions.slice(0, 5) ?? []).map((transaction) => (
                 <article key={transaction.id}>
-                  <span>{transaction.date.slice(5)} - {transaction.category}</span>
+                  <span>{formatDate(transaction.date)}</span>
                   <strong>{transaction.description}</strong>
-                  <b className={transaction.amount >= 0 ? 'income' : 'expense'}>
-                    {money(transaction.amount)}
-                  </b>
+                  <span>{transaction.category}</span>
+                  <span>{transaction.transaction_type ?? 'Lancamento'}</span>
+                  <b className={transaction.amount >= 0 ? 'income' : 'expense'}>{money(transaction.amount)}</b>
+                  <span>{money(summary?.kpis.balance)}</span>
                 </article>
+              ))}
+              {!summary?.recentTransactions.length && (
+                <article className="empty-row">
+                  <strong>Sem transacoes ainda</strong>
+                  <small>Registre pelo chat ou importe um extrato.</small>
+                </article>
+              )}
+            </div>
+          </section>
+
+          <section className="month-card glass-panel">
+            <div className="panel-title">
+              <h2>Resumo do mes</h2>
+              <button type="button">Ver relatorio <ChevronDown size={14} /></button>
+            </div>
+            <div className="month-lines">
+              <span><CircleDollarSign size={14} /> Receitas <b className="income">{money(summary?.kpis.income)}</b></span>
+              <span><TrendingDown size={14} /> Despesas <b className="expense">{money(summary?.kpis.expenses)}</b></span>
+              <span><Landmark size={14} /> Saldo liquido <b className={summary && summary.kpis.net < 0 ? 'expense' : 'income'}>{money(summary?.kpis.net)}</b></span>
+            </div>
+            <div className="month-chart">
+              {monthBars.map((bar, index) => (
+                <i key={`${bar.height}-${index}`} className={bar.negative ? 'negative' : ''} style={{ height: `${bar.height}px` }} />
               ))}
             </div>
           </section>
+
+          <nav className="dock-nav" aria-label="Atalhos do painel">
+            <button type="button" className="active"><Grid2X2 size={18} /> Visao geral</button>
+            <button type="button"><PieChart size={18} /> Analises</button>
+            <button type="button" className="dock-plus" onClick={() => setQuestion('Registrar novo lancamento')}><Plus size={24} /></button>
+            <button type="button"><Sparkles size={18} /> Insights</button>
+            <button type="button"><Zap size={18} /> Atalhos</button>
+          </nav>
         </main>
         )}
       </section>
