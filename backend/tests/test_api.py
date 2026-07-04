@@ -176,6 +176,28 @@ def test_simple_finance_daily_income_expense_and_pending_payment(tmp_path, monke
     assert summary["totals"]["balanceAfterPending"] == 90
 
 
+def test_simple_finance_records_weekly_work_hours(tmp_path, monkeypatch):
+    client = make_empty_client(tmp_path, monkeypatch)
+
+    response = client.post(
+        "/api/simple/chat",
+        json={"message": "segunda eu trabalhei das 11:00 às 19:30 ganhando 12 por hora"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["intent"] == "registrar_jornada_trabalho"
+    assert body["data"]["hours"] == 8.5
+    assert body["data"]["gross"] == 102
+    assert body["data"]["workWeek"]["hours"] == 8.5
+    assert body["data"]["workWeek"]["gross"] == 102
+    assert "Total da semana" in body["answer"]
+
+    summary = client.get("/api/simple/summary").json()
+    assert summary["workWeek"]["hours"] == 8.5
+    assert summary["workWeek"]["gross"] == 102
+
+
 def test_agent_records_income_and_sums_repeated_entries(tmp_path, monkeypatch):
     client = make_client(tmp_path, monkeypatch)
     start_balance = client.get("/api/dashboard").json()["kpis"]["balance"]

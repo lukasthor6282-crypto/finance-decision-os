@@ -34,6 +34,7 @@ button:disabled {
 .metric,
 .chat-panel,
 .summary-panel,
+.work-week-panel,
 .list-panel {
   border: 1px solid rgba(167, 184, 202, 0.16);
   border-radius: 10px;
@@ -78,6 +79,7 @@ button:disabled {
 .pending-impact strong,
 .metric strong,
 .closing-number strong,
+.work-total strong,
 .entry-list strong,
 .invoice-head strong {
   color: var(--heading);
@@ -94,6 +96,8 @@ button:disabled {
 .section-title span,
 .metric small,
 .metric p,
+.work-total span,
+.work-list span,
 .entry-list span,
 .invoice-head span,
 .invoice-items span,
@@ -322,6 +326,7 @@ button:disabled {
   grid-template-columns: minmax(520px, 1.25fr) minmax(300px, 0.7fr) minmax(340px, 0.85fr);
   grid-template-areas:
     "chat summary invoices"
+    "chat workweek invoices"
     "chat pending invoices"
     "recent recent recent";
   gap: 14px;
@@ -342,11 +347,16 @@ button:disabled {
   padding: 18px;
 }
 
+.work-week-panel {
+  grid-area: workweek;
+  padding: 18px;
+}
+
 .list-panel {
   padding: 18px;
 }
 
-.list-panel:nth-of-type(3) {
+.pending-panel {
   grid-area: pending;
 }
 
@@ -354,7 +364,7 @@ button:disabled {
   grid-area: invoices;
 }
 
-.exec-grid > .list-panel:last-child {
+.recent-panel {
   grid-area: recent;
 }
 
@@ -493,11 +503,52 @@ button:disabled {
 }
 
 .closing-row b,
+.work-list b,
 .entry-list b,
 .invoice-head b,
 .invoice-items b {
   color: var(--heading);
   font-family: var(--numbers);
+}
+
+.work-total {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgba(167, 184, 202, 0.1);
+}
+
+.work-total strong {
+  font-family: var(--numbers);
+  font-size: 36px;
+  line-height: 1;
+  letter-spacing: -0.035em;
+}
+
+.work-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.work-list article {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(167, 184, 202, 0.08);
+}
+
+.work-list article:last-child {
+  border-bottom: 0;
+}
+
+.work-list p {
+  color: var(--muted-strong);
+  line-height: 1.45;
 }
 
 .entry-list,
@@ -601,6 +652,7 @@ button:disabled {
   .metric,
   .chat-panel,
   .summary-panel,
+  .work-week-panel,
   .list-panel,
   .primary-balance,
   .pending-impact {
@@ -718,6 +770,7 @@ button:disabled {
     grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.82fr);
     grid-template-areas:
       "chat summary"
+      "chat workweek"
       "chat pending"
       "invoices invoices"
       "recent recent";
@@ -773,6 +826,7 @@ button:disabled {
     grid-template-areas:
       "chat"
       "summary"
+      "workweek"
       "pending"
       "invoices"
       "recent";
@@ -800,6 +854,7 @@ button:disabled {
   .metric,
   .chat-panel,
   .summary-panel,
+  .work-week-panel,
   .list-panel {
     border-radius: 9px;
     padding: 14px;

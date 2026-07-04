@@ -208,6 +208,20 @@ export type SimpleInvoice = {
   items: SimpleInvoiceItem[]
 }
 
+export type SimpleWorkSession = {
+  id: number
+  date: string
+  start_time: string | null
+  end_time: string | null
+  break_minutes: number
+  hourly_rate: number
+  hours: number
+  gross_amount: number
+  description: string
+  notes?: string | null
+  created_at?: string
+}
+
 export type SimpleSummary = {
   month: string
   asOf: string
@@ -222,6 +236,13 @@ export type SimpleSummary = {
   pendingEntries: SimpleEntry[]
   openInvoices: SimpleInvoice[]
   recentEntries: SimpleEntry[]
+  workWeek: {
+    weekStart: string
+    weekEnd: string
+    hours: number
+    gross: number
+    sessions: SimpleWorkSession[]
+  }
 }
 
 export type ImportMapping = {

@@ -4,6 +4,7 @@ import {
   ArrowDownRight,
   ArrowUpRight,
   CheckCircle2,
+  Clock3,
   CreditCard,
   FileClock,
   Landmark,
@@ -15,7 +16,7 @@ import {
   Wallet,
 } from 'lucide-react'
 import { askAgent, getSimpleSummary } from './api'
-import type { SimpleEntry, SimpleInvoice, SimpleSummary } from './types'
+import type { SimpleEntry, SimpleInvoice, SimpleSummary, SimpleWorkSession } from './types'
 import './App.css'
 
 type ChatMessage = {
@@ -53,6 +54,13 @@ const formatMonth = (value?: string) => {
   if (!value) return 'mês atual'
   const [year, month] = value.split('-').map(Number)
   return new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric' }).format(new Date(year, month - 1, 1))
+}
+
+const formatWorkHours = (value = 0) => {
+  const hours = Math.floor(value)
+  const minutes = Math.round((value - hours) * 60)
+  if (!minutes) return `${hours}h`
+  return `${hours}h${String(minutes).padStart(2, '0')}`
 }
 
 function App() {
@@ -114,6 +122,13 @@ function App() {
         icon: <CreditCard size={18} />,
         tone: 'pending',
       },
+      {
+        label: 'Horas da semana',
+        value: formatWorkHours(summary?.workWeek?.hours ?? 0),
+        detail: `${money(summary?.workWeek?.gross ?? 0)} bruto`,
+        icon: <Clock3 size={18} />,
+        tone: 'income',
+      },
     ],
     [summary, totals],
   )
@@ -124,6 +139,7 @@ function App() {
     'Tenho R$ 120 de internet para pagar',
     'Tenho R$ 1.081,38 de fatura, R$ 481 é da parcela do meu celular, o resto são compras avulsas',
     'Paguei R$ 300 da fatura',
+    'Segunda trabalhei das 11:00 às 19:30 ganhando 12 por hora',
     'Paguei a internet',
   ]
 
@@ -292,7 +308,10 @@ function App() {
             </div>
           </section>
 
+          <WorkWeekPanel sessions={summary?.workWeek?.sessions ?? []} hours={summary?.workWeek?.hours ?? 0} gross={summary?.workWeek?.gross ?? 0} />
+
           <ListPanel
+            className="pending-panel"
             title="Contas pendentes"
             eyebrow="a pagar"
             icon={<FileClock size={19} />}
@@ -303,6 +322,7 @@ function App() {
           <InvoicePanel invoices={summary?.openInvoices ?? []} />
 
           <ListPanel
+            className="recent-panel"
             title="Últimos lançamentos"
             eyebrow="histórico"
             icon={<ListChecks size={19} />}
@@ -329,7 +349,35 @@ function MetricTile({ item }: { item: MetricItem }) {
   )
 }
 
+function WorkWeekPanel({ sessions, hours, gross }: { sessions: SimpleWorkSession[]; hours: number; gross: number }) {
+  return (
+    <section className="work-week-panel">
+      <div className="section-title">
+        <div>
+          <span>banco de horas</span>
+          <h2>Horas da semana</h2>
+        </div>
+        <Clock3 size={19} />
+      </div>
+      <div className="work-total">
+        <strong>{formatWorkHours(hours)}</strong>
+        <span>{money(gross)} bruto</span>
+      </div>
+      <div className="work-list">
+        {sessions.slice(-4).map((session) => (
+          <article key={session.id}>
+            <span>{formatDate(session.date)} · {session.start_time ?? 'manual'}{session.end_time ? `-${session.end_time}` : ''}</span>
+            <b>{formatWorkHours(session.hours)}</b>
+          </article>
+        ))}
+        {!sessions.length && <p>Nenhuma jornada salva nesta semana.</p>}
+      </div>
+    </section>
+  )
+}
+
 function ListPanel({
+  className = '',
   title,
   eyebrow,
   icon,
@@ -337,6 +385,7 @@ function ListPanel({
   entries,
   recent = false,
 }: {
+  className?: string
   title: string
   eyebrow: string
   icon: ReactNode
@@ -345,7 +394,7 @@ function ListPanel({
   recent?: boolean
 }) {
   return (
-    <section className="list-panel">
+    <section className={`list-panel ${className}`}>
       <div className="section-title">
         <div>
           <span>{eyebrow}</span>

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from datetime import date
+from datetime import date, timedelta
 from sqlite3 import Connection
 from typing import Any
 
@@ -9,6 +9,7 @@ from .analytics import money
 from .categorizer import categorize
 from .db import is_postgres
 from .normalization import normalize_text, parse_amount
+from .worktime import parse_hourly_rate, parse_work_session_message
 
 
 SUMMARY_WORDS = (
@@ -68,6 +69,23 @@ def handle_simple_message(conn: Connection, message: str) -> dict | None:
 
     amounts = extract_amounts(original)
 
+    if _is_work_query(normalized):
+        return _work_week_reply(conn)
+    hourly_rate = parse_hourly_rate(original)
+    parsed_work = parse_work_session_message(original, _known_hourly_rate(conn))
+    if parsed_work:
+        return _record_work_session(conn, parsed_work)
+    if hourly_rate and any(marker in normalized for marker in ("minha hora", "valor da hora", "por hora")):
+        _remember_hourly_rate(conn, hourly_rate)
+        return {
+            "answer": f"Salvei seu valor/hora: {money(hourly_rate)}.",
+            "actions": ["valor_hora_salvo"],
+            "confidence": 0.9,
+            "mode": "simple",
+            "intent": "salvar_valor_hora",
+            "data": {"hourlyRate": hourly_rate},
+        }
+
     if _is_summary_query(normalized):
         return _summary_reply(conn)
     if "fatura" in normalized and any(word in normalized for word in PAY_WORDS):
@@ -124,6 +142,7 @@ def simple_summary(conn: Connection, month: str | None = None) -> dict:
     after_pending = _round(net - pending_total - invoice_remaining)
 
     recent = _recent_activity(conn)
+    work_week = work_week_summary(conn)
     return {
         "month": month_key,
         "asOf": date.today().isoformat(),
@@ -138,6 +157,33 @@ def simple_summary(conn: Connection, month: str | None = None) -> dict:
         "pendingEntries": pending_entries,
         "openInvoices": invoices,
         "recentEntries": recent,
+        "workWeek": work_week,
+    }
+
+
+def work_week_summary(conn: Connection, anchor_date: str | None = None) -> dict:
+    current = date.fromisoformat(anchor_date) if anchor_date else date.today()
+    week_start = current - timedelta(days=current.weekday())
+    week_end = week_start + timedelta(days=6)
+    rows = _rows(
+        conn.execute(
+            """
+            SELECT id, date, start_time, end_time, break_minutes, hourly_rate, hours, gross_amount, description, notes, created_at
+            FROM work_sessions
+            WHERE date >= ? AND date <= ?
+            ORDER BY date ASC, start_time ASC, id ASC
+            """,
+            (week_start.isoformat(), week_end.isoformat()),
+        ).fetchall()
+    )
+    hours = _round(sum(float(row["hours"]) for row in rows))
+    gross = _round(sum(float(row["gross_amount"]) for row in rows))
+    return {
+        "weekStart": week_start.isoformat(),
+        "weekEnd": week_end.isoformat(),
+        "hours": hours,
+        "gross": gross,
+        "sessions": rows,
     }
 
 
@@ -304,6 +350,126 @@ def _summary_reply(conn: Connection) -> dict:
         "intent": "consultar_resumo_mes",
         "data": summary,
     }
+
+
+def _record_work_session(conn: Connection, parsed: Any) -> dict:
+    existing = _find_work_session(conn, parsed.date, parsed.start_time, parsed.end_time)
+    _remember_hourly_rate(conn, parsed.hourly_rate)
+    if existing:
+        week = work_week_summary(conn, parsed.date)
+        return {
+            "answer": f"Essa jornada já estava salva. Total da semana: {_format_hours(week['hours'])} e {money(week['gross'])}.",
+            "actions": ["jornada_duplicada"],
+            "confidence": 0.86,
+            "mode": "simple",
+            "intent": "registrar_jornada_trabalho",
+            "data": {"duplicated": True, "workWeek": week, "session": dict(existing)},
+        }
+
+    returning = " RETURNING id" if is_postgres(conn) else ""
+    cursor = conn.execute(
+        f"""
+        INSERT INTO work_sessions (
+            date, start_time, end_time, break_minutes, hourly_rate, hours, gross_amount, description, notes
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        {returning}
+        """,
+        (
+            parsed.date,
+            parsed.start_time,
+            parsed.end_time,
+            parsed.break_minutes,
+            parsed.hourly_rate,
+            parsed.hours,
+            parsed.gross_amount,
+            parsed.description,
+            parsed.notes,
+        ),
+    )
+    session_id = int(cursor.fetchone()["id"] if is_postgres(conn) else cursor.lastrowid)
+    week = work_week_summary(conn, parsed.date)
+    interval = f" ({parsed.start_time}-{parsed.end_time})" if parsed.start_time and parsed.end_time else ""
+    return {
+        "answer": (
+            f"Registrei sua jornada{interval}: {_format_hours(parsed.hours)} x {money(parsed.hourly_rate)}/h = "
+            f"{money(parsed.gross_amount)}. Total da semana: {_format_hours(week['hours'])} e {money(week['gross'])}."
+        ),
+        "actions": ["jornada_registrada"],
+        "confidence": 0.94,
+        "mode": "simple",
+        "intent": "registrar_jornada_trabalho",
+        "data": {"sessionId": session_id, "hours": parsed.hours, "gross": parsed.gross_amount, "workWeek": week},
+    }
+
+
+def _work_week_reply(conn: Connection) -> dict:
+    week = work_week_summary(conn)
+    if not week["sessions"]:
+        answer = "Ainda não tenho horas salvas nesta semana."
+    else:
+        answer = f"Nesta semana você trabalhou {_format_hours(week['hours'])}. Total bruto: {money(week['gross'])}."
+    return {
+        "answer": answer,
+        "actions": ["horas_semana_consultadas"],
+        "confidence": 0.91,
+        "mode": "simple",
+        "intent": "consultar_banco_horas",
+        "data": week,
+    }
+
+
+def _find_work_session(conn: Connection, session_date: str, start_time: str | None, end_time: str | None) -> dict | None:
+    if start_time and end_time:
+        row = conn.execute(
+            """
+            SELECT id, date, start_time, end_time, break_minutes, hourly_rate, hours, gross_amount, description, notes, created_at
+            FROM work_sessions
+            WHERE date = ? AND start_time = ? AND end_time = ?
+            LIMIT 1
+            """,
+            (session_date, start_time, end_time),
+        ).fetchone()
+    else:
+        row = conn.execute(
+            """
+            SELECT id, date, start_time, end_time, break_minutes, hourly_rate, hours, gross_amount, description, notes, created_at
+            FROM work_sessions
+            WHERE date = ? AND start_time IS NULL AND end_time IS NULL
+            LIMIT 1
+            """,
+            (session_date,),
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def _known_hourly_rate(conn: Connection) -> float | None:
+    row = conn.execute(
+        """
+        SELECT value
+        FROM user_facts
+        WHERE key IN ('simple:hourly_rate', 'hourly_rate')
+        ORDER BY CASE WHEN key = 'simple:hourly_rate' THEN 0 ELSE 1 END
+        LIMIT 1
+        """
+    ).fetchone()
+    if not row:
+        return None
+    try:
+        return parse_amount(row["value"])
+    except Exception:
+        return None
+
+
+def _remember_hourly_rate(conn: Connection, hourly_rate: float) -> None:
+    conn.execute(
+        """
+        INSERT INTO user_facts (key, value, value_type, confidence, updated_at)
+        VALUES ('simple:hourly_rate', ?, 'number', 1, CURRENT_TIMESTAMP)
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP
+        """,
+        (f"{hourly_rate:.2f}",),
+    )
 
 
 def extract_amounts(text: str) -> list[float]:
@@ -504,6 +670,19 @@ def _is_summary_query(normalized: str) -> bool:
     return any(word in normalized for word in SUMMARY_WORDS) and not any(word in normalized for word in PAY_WORDS)
 
 
+def _is_work_query(normalized: str) -> bool:
+    return any(
+        marker in normalized
+        for marker in (
+            "quanto trabalhei",
+            "horas da semana",
+            "total da semana",
+            "banco de horas",
+            "minhas horas",
+        )
+    )
+
+
 def _ask(text: str) -> dict:
     return {
         "answer": text,
@@ -525,3 +704,14 @@ def _round(value: float) -> float:
 
 def _today() -> str:
     return date.today().isoformat()
+
+
+def _format_hours(value: float) -> str:
+    hours = int(value)
+    minutes = int(round((float(value) - hours) * 60))
+    if minutes == 60:
+        hours += 1
+        minutes = 0
+    if minutes == 0:
+        return f"{hours}h"
+    return f"{hours}h{minutes:02d}"
